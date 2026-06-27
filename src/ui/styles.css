@@ -195,6 +195,59 @@ a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visib
 .causal ul { margin: 0.4rem 0 0; padding-left: 1.1rem; }
 .causal code { background: #0a0c12; padding: 0.05em 0.3em; border-radius: 4px; word-break: break-all; }
 
+/* Screen-reader-only text */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* Decision trace */
+.trace { margin-top: 0.9rem; }
+.trace h4 { margin: 0 0 0.4rem; font-size: 0.85rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.trace-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.3rem; counter-reset: step; }
+.trace-step {
+  display: flex; gap: 0.55rem; align-items: flex-start;
+  padding: 0.4rem 0.55rem; border-radius: 6px; border: 1px solid var(--border);
+  background: var(--panel-2); font-size: 0.84rem;
+}
+.trace-step .trace-icon { font-weight: 800; line-height: 1.3; }
+.trace-step.pass .trace-icon { color: var(--safe); }
+.trace-step.fail .trace-icon { color: var(--danger); }
+.trace-step.info .trace-icon, .trace-step.skip .trace-icon { color: var(--muted); }
+.trace-body { display: flex; flex-direction: column; gap: 0.1rem; }
+.trace-label { font-weight: 600; }
+.trace-detail { color: var(--muted); font-size: 0.8rem; }
+.trace-step.decisive { border-color: var(--sig-tint); background: rgba(245, 196, 81, 0.1); }
+.trace-tag { color: var(--sig-tint); font-weight: 700; font-size: 0.75rem; }
+
+/* Side-by-side compare */
+.compare-grid { display: grid; gap: 0.9rem; grid-template-columns: 1fr; }
+.result-col { border: 1px solid var(--border); border-radius: 10px; padding: 0.8rem; }
+.result-col .col-title { margin: 0 0 0.6rem; font-size: 1rem; }
+.result-col .banner { padding: 0.7rem 0.8rem; }
+.result-col .banner .headline { font-size: 1rem; }
+@media (min-width: 760px) {
+  .compare-grid { grid-template-columns: 1fr 1fr; align-items: start; }
+}
+
+/* Guided tour */
+.tour-step { border-left: 3px solid var(--accent); padding: 0.2rem 0 0.2rem 0.8rem; margin: 0.5rem 0; }
+.tour-step h3 { margin: 0 0 0.3rem; font-size: 1.02rem; }
+.tour-step p { margin: 0; color: var(--text); font-size: 0.92rem; line-height: 1.5; }
+.tour-progress { display: flex; gap: 0.35rem; margin: 0.6rem 0; }
+.tour-progress .dot { width: 0.6rem; height: 0.6rem; border-radius: 50%; background: var(--border); }
+.tour-progress .dot.on { background: var(--accent); }
+.tour-progress .dot.done { background: var(--safe); }
+
+/* Defense rules drawer */
+.defense-rules {
+  margin-top: 0.8rem; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--panel-2); padding: 0.3rem 0.7rem;
+}
+.defense-rules summary { cursor: pointer; font-size: 0.88rem; font-weight: 600; padding: 0.4rem 0; }
+.defense-rules ol { margin: 0.3rem 0 0.6rem; padding-left: 1.2rem; font-size: 0.86rem; }
+.defense-rules li { margin-bottom: 0.4rem; line-height: 1.45; }
+
 .launchers { display: grid; gap: 0.6rem; grid-template-columns: 1fr; }
 .launcher-card { border: 1px solid var(--border); border-radius: 8px; padding: 0.7rem 0.8rem; }
 .launcher-card h3 { margin: 0 0 0.25rem; font-size: 0.98rem; }

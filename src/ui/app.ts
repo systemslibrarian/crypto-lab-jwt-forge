@@ -2,7 +2,7 @@ import { generateSessionKeys, type SessionKeys } from '../jwt/keys.ts';
 import { sign } from '../jwt/sign.ts';
 import { verifyCorrect } from '../jwt/verifyCorrect.ts';
 import { verifyVulnerable } from '../jwt/verifyVulnerable.ts';
-import type { AlgName, VerifierPolicy, VerifyResult, VerifierKey, JwtHeader, JwtClaims, SigningKey } from '../jwt/types.ts';
+import type { AlgName, VerifierPolicy, VerifyResult, VerifierKey, JwtHeader, JwtClaims, SigningKey, TraceStep } from '../jwt/types.ts';
 import { base64urlDecodeToString, base64urlEncodeString } from '../jwt/base64url.ts';
 import { attackAlgNone } from '../attacks/algNone.ts';
 import { attackKeyConfusion } from '../attacks/keyConfusion.ts';
@@ -28,6 +28,11 @@ interface State {
   /** In-progress edits to the decoded JSON, preserved across tab switches. */
   draftHeader?: string;
   draftPayload?: string;
+  /** Side-by-side comparison: run both verifiers on the same token. */
+  compare: boolean;
+  compareResults?: { correct: VerifyResult; vulnerable: VerifyResult };
+  /** Guided lesson tour; undefined when not active. */
+  tourIndex?: number;
 }
 
 let state: State;
@@ -77,16 +82,24 @@ function decodeUnsafe(token: string): { header: JwtHeader; claims: JwtClaims; si
 
 async function runVerification(): Promise<void> {
   const policy = buildPolicy();
-  state.result =
-    state.mode === 'correct'
-      ? await verifyCorrect(state.currentToken, policy)
-      : await verifyVulnerable(state.currentToken, policy);
+  if (state.compare) {
+    const [correct, vulnerable] = await Promise.all([
+      verifyCorrect(state.currentToken, policy),
+      verifyVulnerable(state.currentToken, policy),
+    ]);
+    state.compareResults = { correct, vulnerable };
+    state.result = state.mode === 'correct' ? correct : vulnerable;
+  } else {
+    state.compareResults = undefined;
+    state.result =
+      state.mode === 'correct'
+        ? await verifyCorrect(state.currentToken, policy)
+        : await verifyVulnerable(state.currentToken, policy);
+  }
 
   // Flash the policy panel when an invariant in the policy caught a forgery.
   state.flashPolicy =
-    state.mode === 'correct' &&
-    state.result.decision === 'reject' &&
-    !!state.result.invariantTriggered;
+    state.result.decision === 'reject' && !!state.result.invariantTriggered && state.mode === 'correct';
 
   renderPolicyPanel();
   renderResultPanel();
@@ -265,6 +278,17 @@ function renderPolicyPanel(): void {
     <div class="btn-row">
       <button class="btn" data-action="verify">Verify this token ▶</button>
     </div>
+
+    <details class="defense-rules">
+      <summary>Real-world defense rules (what these invariants mean in production)</summary>
+      <ol>
+        <li><strong>Never derive accepted algorithms from the token header.</strong> The application supplies the allowlist; the token does not get to name its own algorithm.</li>
+        <li><strong>Bind each key to exactly the algorithms it may verify.</strong> An RSA public key must never be reachable from an HMAC code path — enforce it with types, not discipline.</li>
+        <li><strong>Disable <code>none</code></strong> unless the surrounding protocol explicitly requires an unsecured JWS.</li>
+        <li><strong>Reject before claims are trusted.</strong> Validate the signature first; check <code>exp</code>/<code>nbf</code> separately and never conflate "valid signature" with "valid token".</li>
+      </ol>
+    </details>
+
     <p class="notwhat">Not in scope: brute-forcing the HS256 secret. That's password strength, not a JWT structural flaw.</p>`;
 
   if (state.flashPolicy) {
@@ -280,6 +304,95 @@ function pill(label: string, status: 'valid' | 'invalid' | 'not-checked'): strin
   return `<span class="status-row"><span class="k">${label}</span><span class="pill ${cls}">${icon}${status}</span></span>`;
 }
 
+function bannerParts(r: VerifyResult): { cls: string; icon: string; headline: string } {
+  // Colour tracks SYSTEM INTEGRITY, not the raw accept/reject.
+  if (r.systemIntegrity === 'fooled' && r.decision === 'accept') {
+    return { cls: 'forged', icon: '⚠', headline: 'FORGED TOKEN ACCEPTED' };
+  }
+  if (r.decision === 'accept') {
+    return { cls: 'valid', icon: '✓', headline: 'Valid signature — all checks passed' };
+  }
+  return { cls: 'rejected', icon: '✓', headline: state.explanation ? 'REJECTED AS EXPECTED' : 'Rejected' };
+}
+
+function traceIcon(status: TraceStep['status']): string {
+  return status === 'pass' ? '✓' : status === 'fail' ? '✗' : status === 'skip' ? '·' : '•';
+}
+
+function renderTrace(trace: TraceStep[]): string {
+  if (!trace || trace.length === 0) return '';
+  const rows = trace
+    .map(
+      (s) => `
+      <li class="trace-step ${s.status}${s.decisive ? ' decisive' : ''}">
+        <span class="trace-icon" aria-hidden="true">${traceIcon(s.status)}</span>
+        <span class="trace-body">
+          <span class="trace-label">${esc(s.label)}${s.decisive ? ' <span class="trace-tag">← decided here</span>' : ''}</span>
+          <span class="trace-detail">${esc(s.detail)}</span>
+        </span>
+      </li>`,
+    )
+    .join('');
+  return `<div class="trace"><h4>Decision trace <span class="hint" style="margin:0">(token alg → policy → key type → signature → claims)</span></h4><ol class="trace-list">${rows}</ol></div>`;
+}
+
+function causalBlock(): string {
+  if (!state.explanation) return '';
+  const ex = state.explanation;
+  return `
+    <div class="causal">
+      <h4>${esc(ex.title)} — causal chain</h4>
+      <div class="chain">${esc(ex.whyItPassed)}</div>
+      <ul>
+        <li><strong>Verifier mistake:</strong> ${esc(ex.verifierMistake)}</li>
+        <li><strong>Correct verifier defends by:</strong> ${esc(ex.correctDefense)}</li>
+        ${(ex.detail ?? []).map((d) => `<li><code>${esc(d)}</code></li>`).join('')}
+      </ul>
+    </div>`;
+}
+
+function renderResultColumn(r: VerifyResult, title: string): string {
+  const b = bannerParts(r);
+  return `
+    <div class="result-col">
+      <h3 class="col-title">${esc(title)}</h3>
+      <div class="banner ${b.cls}">
+        <div class="icon" aria-hidden="true">${b.icon}</div>
+        <div><p class="headline">${b.icon} ${esc(b.headline)}</p><p class="reason">${esc(r.reason)}</p></div>
+      </div>
+      <div class="status-rows">
+        ${pill('Signature', r.signature)}
+        ${pill('Claims (exp/nbf)', r.claims)}
+        <div class="status-row"><span class="k">Claimed alg</span><span>${esc(String(r.claimedAlg ?? '—'))}</span></div>
+        ${r.invariantTriggered ? `<div class="status-row"><span class="k">Invariant</span><span>${esc(r.invariantTriggered)}</span></div>` : ''}
+      </div>
+      ${renderTrace(r.trace)}
+    </div>`;
+}
+
+/** Plain-text summary suitable for a slide, classroom note, or bug report. */
+function buildSummary(): string {
+  const r = state.result;
+  if (!r) return '';
+  const lines: string[] = ['JWT Forge — what just happened'];
+  if (state.explanation) lines.push(`Scenario: ${state.explanation.title}`);
+  lines.push(`Token claimed alg: ${r.claimedAlg ?? '—'}`);
+  if (state.compareResults) {
+    const c = state.compareResults.correct;
+    const v = state.compareResults.vulnerable;
+    lines.push(`Correct verifier:    ${c.decision.toUpperCase()} — ${c.reason}`);
+    lines.push(`Vulnerable verifier: ${v.decision.toUpperCase()}${v.systemIntegrity === 'fooled' ? ' (FOOLED)' : ''} — ${v.reason}`);
+  } else {
+    lines.push(`Verifier: ${state.mode}`);
+    lines.push(`Decision: ${r.decision.toUpperCase()}${r.systemIntegrity === 'fooled' ? ' (FOOLED)' : ''}`);
+    lines.push(`Signature: ${r.signature}; Claims: ${r.claims}`);
+    lines.push(`Reason: ${r.reason}`);
+    if (r.invariantTriggered) lines.push(`Invariant: ${r.invariantTriggered}`);
+  }
+  if (state.explanation) lines.push(`Why: ${state.explanation.whyItPassed}`);
+  return lines.join('\n');
+}
+
 function renderResultPanel(): void {
   const panel = root.querySelector('#result-panel')!;
   const r = state.result;
@@ -288,46 +401,39 @@ function renderResultPanel(): void {
     return;
   }
 
-  // Color tracks SYSTEM INTEGRITY, not the raw accept/reject.
-  let cls: string, icon: string, headline: string;
-  if (r.systemIntegrity === 'fooled' && r.decision === 'accept') {
-    cls = 'forged'; icon = '⚠'; headline = 'FORGED TOKEN ACCEPTED';
-  } else if (r.decision === 'accept') {
-    cls = 'valid'; icon = '✓'; headline = 'Valid signature — all checks passed';
-  } else {
-    cls = 'rejected'; icon = '✓';
-    headline = state.explanation ? 'REJECTED AS EXPECTED' : 'Rejected';
+  if (state.compareResults) {
+    const { correct, vulnerable } = state.compareResults;
+    const srSummary = `Correct verifier ${correct.decision}s; Vulnerable verifier ${vulnerable.decision}s${vulnerable.systemIntegrity === 'fooled' ? ' and is fooled' : ''}.`;
+    panel.innerHTML = `
+      <h2>3 · Result — side by side</h2>
+      <p class="sr-only" role="status" aria-live="polite">${esc(srSummary)}</p>
+      <p class="hint">Same token, same policy, both verifiers. The difference is entirely in the implementation.</p>
+      <div class="compare-grid">
+        ${renderResultColumn(correct, '✓ Correct verifier')}
+        ${renderResultColumn(vulnerable, '⚠ Vulnerable verifier')}
+      </div>
+      ${causalBlock()}
+      <div class="btn-row">
+        <button class="btn secondary" data-action="compare-off">← Back to single verifier</button>
+        <button class="btn secondary" data-action="copy-summary">Copy summary</button>
+      </div>`;
+    return;
   }
 
+  const b = bannerParts(r);
   const invariantLine = r.invariantTriggered
     ? `<div class="status-row"><span class="k">Invariant that caught it</span><span>${esc(r.invariantTriggered)}</span></div>`
     : '';
-
-  let causal = '';
-  if (state.explanation) {
-    const ex = state.explanation;
-    causal = `
-      <div class="causal">
-        <h4>${esc(ex.title)} — causal chain</h4>
-        <div class="chain">${esc(ex.whyItPassed)}</div>
-        <ul>
-          <li><strong>Verifier mistake:</strong> ${esc(ex.verifierMistake)}</li>
-          <li><strong>Correct verifier defends by:</strong> ${esc(ex.correctDefense)}</li>
-          ${(ex.detail ?? []).map((d) => `<li><code>${esc(d)}</code></li>`).join('')}
-        </ul>
-      </div>`;
-  }
-
   const contrastMode = state.mode === 'correct' ? 'vulnerable' : 'correct';
   const contrastLabel =
     contrastMode === 'correct' ? '▶ Now try the Correct verifier' : '▶ Now try the Vulnerable verifier';
 
   panel.innerHTML = `
     <h2>3 · Result</h2>
-    <div class="banner ${cls}" role="status" aria-live="polite">
-      <div class="icon" aria-hidden="true">${icon}</div>
+    <div class="banner ${b.cls}" role="status" aria-live="polite">
+      <div class="icon" aria-hidden="true">${b.icon}</div>
       <div>
-        <p class="headline">${icon} ${esc(headline)}</p>
+        <p class="headline">${b.icon} ${esc(b.headline)}</p>
         <p class="reason">${esc(r.reason)}</p>
       </div>
     </div>
@@ -339,9 +445,12 @@ function renderResultPanel(): void {
       <div class="status-row"><span class="k">Token claimed alg</span><span>${esc(String(r.claimedAlg ?? '—'))}</span></div>
       ${invariantLine}
     </div>
-    ${causal}
+    ${renderTrace(r.trace)}
+    ${causalBlock()}
     <div class="btn-row">
       <button class="btn contrast" data-action="contrast" data-mode="${contrastMode}">${contrastLabel}</button>
+      <button class="btn secondary" data-action="compare-on">⇄ Compare both side by side</button>
+      <button class="btn secondary" data-action="copy-summary">Copy summary</button>
     </div>`;
 }
 
@@ -445,6 +554,143 @@ function tamper(): void {
   void runVerification();
 }
 
+// ---- Guided lesson tour --------------------------------------------------------
+
+interface TourStep {
+  title: string;
+  body: string;
+  /** Mutate state to set up this step (token, mode, policy, compare). */
+  setup: () => void | Promise<void>;
+}
+
+function setForgeryScene(): void {
+  state.acceptedAlgs = new Set<AlgName>(['RS256']);
+  state.heldKey = 'rsaPublic';
+  state.compare = false;
+  state.view = 'decoded';
+}
+
+const tourSteps: TourStep[] = [
+  {
+    title: 'Start with a genuine, valid token',
+    body: 'This RS256 token was signed with the real private key. The Correct verifier accepts it — calm green. Notice the decision trace passes every step.',
+    setup: () => {
+      state.currentToken = state.baseToken;
+      state.explanation = undefined;
+      setForgeryScene();
+      state.mode = 'correct';
+    },
+  },
+  {
+    title: 'Lesson 1 — tampering without a bug fails',
+    body: 'We change a claim to admin:true but keep the old signature. Even the Vulnerable verifier rejects it: the signature is bound to the original content. No structural flaw, no forgery.',
+    setup: () => {
+      const r = attackSilentTamper(state.baseToken);
+      state.currentToken = r.forgedToken;
+      state.explanation = r.explanation;
+      setForgeryScene();
+      state.mode = 'vulnerable';
+    },
+  },
+  {
+    title: 'Lesson 2 — alg:none, against the Vulnerable verifier',
+    body: 'Strip the signature and set alg:none. The Vulnerable verifier reads the alg from the token, picks the "none" routine, and checks no signature at all → FORGED TOKEN ACCEPTED (red).',
+    setup: () => {
+      const r = attackAlgNone(state.baseToken);
+      state.currentToken = r.forgedToken;
+      state.explanation = r.explanation;
+      setForgeryScene();
+      state.mode = 'vulnerable';
+    },
+  },
+  {
+    title: 'Lesson 2 — same token, the Correct verifier',
+    body: 'Identical token. The Correct verifier checks its allowlist first: "none" is not on it, so it never even chooses a routine. REJECTED AS EXPECTED (green). The trace shows exactly where it stops.',
+    setup: () => {
+      const r = attackAlgNone(state.baseToken);
+      state.currentToken = r.forgedToken;
+      state.explanation = r.explanation;
+      setForgeryScene();
+      state.mode = 'correct';
+    },
+  },
+  {
+    title: 'Lesson 3 — RS/HS confusion, against the Vulnerable verifier',
+    body: 'Re-sign with HS256, using the RSA PUBLIC key (a value anyone can read) as the HMAC secret. The Vulnerable verifier runs HMAC with that same public key → accepted (red).',
+    setup: async () => {
+      const r = await attackKeyConfusion(state.baseToken, state.keys.rsaPublicKeyPem);
+      state.currentToken = r.forgedToken;
+      state.explanation = r.explanation;
+      setForgeryScene();
+      state.mode = 'vulnerable';
+    },
+  },
+  {
+    title: 'Lesson 3 — same token, the Correct verifier',
+    body: 'The Correct verifier expects RS256 and holds an RsaPublicKey. HS256 is not allowlisted, and an RSA public key is type-incompatible with the HMAC path — confusion is literally unrepresentable. Rejected (green).',
+    setup: async () => {
+      const r = await attackKeyConfusion(state.baseToken, state.keys.rsaPublicKeyPem);
+      state.currentToken = r.forgedToken;
+      state.explanation = r.explanation;
+      setForgeryScene();
+      state.mode = 'correct';
+    },
+  },
+  {
+    title: 'Lesson 4 — the defense is policy + key binding',
+    body: 'Same forged token, both verifiers side by side. The only difference is the implementation: the Correct one never lets the attacker-controlled header choose the algorithm or the key. That single rule defeats both attacks.',
+    setup: async () => {
+      const r = await attackKeyConfusion(state.baseToken, state.keys.rsaPublicKeyPem);
+      state.currentToken = r.forgedToken;
+      state.explanation = r.explanation;
+      setForgeryScene();
+      state.compare = true;
+    },
+  },
+];
+
+async function applyTourStep(index: number): Promise<void> {
+  if (index < 0 || index >= tourSteps.length) return;
+  state.tourIndex = index;
+  await tourSteps[index].setup();
+  clearDrafts();
+  renderTour();
+  renderTokenPanel();
+  await runVerification();
+  const tourEl = root.querySelector('#tour') as HTMLElement | null;
+  if (tourEl && typeof tourEl.scrollIntoView === 'function') {
+    tourEl.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'nearest' });
+  }
+}
+
+function renderTour(): void {
+  const el = root.querySelector('#tour')!;
+  if (state.tourIndex === undefined) {
+    el.innerHTML = `
+      <h2>Guided tour <span class="hint" style="margin:0">— 7 steps, ~90 seconds</span></h2>
+      <p class="hint">New to JWTs? Walk the core lesson: genuine token → forge → vulnerable accepts → correct rejects.</p>
+      <div class="btn-row"><button class="btn" data-action="tour-start">▶ Start guided tour</button></div>`;
+    return;
+  }
+  const i = state.tourIndex;
+  const step = tourSteps[i];
+  const isLast = i === tourSteps.length - 1;
+  el.innerHTML = `
+    <h2>Guided tour <span class="hint" style="margin:0">— step ${i + 1} of ${tourSteps.length}</span></h2>
+    <div class="tour-step" role="status" aria-live="polite">
+      <h3>${esc(step.title)}</h3>
+      <p>${esc(step.body)}</p>
+    </div>
+    <div class="tour-progress" aria-hidden="true">${tourSteps
+      .map((_, n) => `<span class="dot ${n === i ? 'on' : n < i ? 'done' : ''}"></span>`)
+      .join('')}</div>
+    <div class="btn-row">
+      <button class="btn secondary" data-action="tour-prev" ${i === 0 ? 'disabled' : ''}>← Previous</button>
+      <button class="btn" data-action="tour-next">${isLast ? 'Finish ✓' : 'Next →'}</button>
+      <button class="btn secondary" data-action="tour-exit">Exit tour</button>
+    </div>`;
+}
+
 // ---- Event wiring --------------------------------------------------------------
 
 function onClick(e: MouseEvent): void {
@@ -511,6 +757,20 @@ function onClick(e: MouseEvent): void {
       state.mode = target.dataset.mode as 'correct' | 'vulnerable';
       void runVerification();
       break;
+    case 'compare-on':
+      state.compare = true;
+      void runVerification();
+      break;
+    case 'compare-off':
+      state.compare = false;
+      void runVerification();
+      break;
+    case 'copy-summary': {
+      void navigator.clipboard?.writeText(buildSummary());
+      target.textContent = 'Copied ✓';
+      setTimeout(() => (target.textContent = 'Copy summary'), 1200);
+      break;
+    }
     case 'verify':
       void runVerification();
       break;
@@ -522,6 +782,24 @@ function onClick(e: MouseEvent): void {
       break;
     case 'attack-tamper':
       void launchAttack('tamper');
+      break;
+    case 'tour-start':
+      void applyTourStep(0);
+      break;
+    case 'tour-prev':
+      void applyTourStep((state.tourIndex ?? 0) - 1);
+      break;
+    case 'tour-next':
+      if (state.tourIndex !== undefined && state.tourIndex >= tourSteps.length - 1) {
+        state.tourIndex = undefined;
+        renderTour();
+      } else {
+        void applyTourStep((state.tourIndex ?? -1) + 1);
+      }
+      break;
+    case 'tour-exit':
+      state.tourIndex = undefined;
+      renderTour();
       break;
   }
 }
@@ -547,6 +825,7 @@ export async function mountApp(el: HTMLElement): Promise<void> {
         forgery was accepted, green means the system held. Everything runs in your browser; keys are
         generated per session and never leave the page.</p>
       </div>
+      <section class="panel" id="tour"></section>
       <section class="panel" id="token-panel"></section>
       <section class="panel" id="policy-panel"></section>
       <section class="panel" id="result-panel"></section>
@@ -594,8 +873,10 @@ export async function mountApp(el: HTMLElement): Promise<void> {
     heldKey: 'rsaPublic',
     mode: 'correct',
     flashPolicy: false,
+    compare: false,
   };
 
+  renderTour();
   renderTokenPanel();
   renderPolicyPanel();
   await runVerification();

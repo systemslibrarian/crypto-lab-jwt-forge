@@ -100,6 +100,17 @@ export interface RawToken {
 export type SignatureStatus = 'valid' | 'invalid' | 'not-checked';
 export type ClaimStatus = 'valid' | 'invalid' | 'not-checked';
 
+export type TraceStatus = 'pass' | 'fail' | 'skip' | 'info';
+
+/** One step in the verifier's decision pipeline, for the visual decision trace. */
+export interface TraceStep {
+  label: string;
+  status: TraceStatus;
+  detail: string;
+  /** The step that determined the final decision (the branch to highlight). */
+  decisive?: boolean;
+}
+
 /**
  * `systemIntegrity` tracks whether the verifier was FOOLED, not whether it returned
  * accept/reject. The Correct verifier can never be fooled, so it always reports `ok`.
@@ -120,6 +131,8 @@ export interface VerifyResult {
   claimDetail?: string;
   /** The `alg` the token claimed (for the UI's causal chain), if it parsed. */
   claimedAlg?: AlgName;
+  /** Step-by-step decision pipeline, for the visual trace. */
+  trace: TraceStep[];
 }
 
 export interface VerifierPolicy {

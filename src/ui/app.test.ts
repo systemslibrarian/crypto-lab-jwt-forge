@@ -98,6 +98,59 @@ describe('UI: silent tamper control', () => {
   });
 });
 
+describe('UI: side-by-side compare', () => {
+  it('shows Correct rejecting and Vulnerable being fooled on one token', async () => {
+    await mountApp(app);
+    await waitFor(() => !!banner());
+
+    click('[data-action="attack-confusion"]');
+    await waitFor(() => banner()!.classList.contains('forged'));
+
+    click('[data-action="compare-on"]');
+    await waitFor(() => app.querySelectorAll('.result-col').length === 2);
+
+    const cols = app.querySelectorAll('.result-col');
+    // Column order is Correct, then Vulnerable.
+    expect(cols[0].querySelector('.banner')!.classList.contains('rejected')).toBe(true);
+    expect(cols[1].querySelector('.banner')!.classList.contains('forged')).toBe(true);
+    // Each column renders a decision trace.
+    expect(cols[0].querySelector('.trace-list')).not.toBeNull();
+  });
+});
+
+describe('UI: decision trace', () => {
+  it('renders a trace with exactly one decisive step for a rejected forgery', async () => {
+    await mountApp(app);
+    await waitFor(() => !!banner());
+    click('[data-action="attack-none"]');
+    await waitFor(() => banner()!.classList.contains('forged'));
+    click('[data-action="contrast"][data-mode="correct"]');
+    await waitFor(() => banner()!.classList.contains('rejected'));
+    expect(app.querySelectorAll('.trace-step').length).toBeGreaterThan(0);
+    expect(app.querySelectorAll('.trace-step.decisive').length).toBe(1);
+  });
+});
+
+describe('UI: guided tour', () => {
+  it('walks genuine → tamper → alg:none forged → correct reject', async () => {
+    await mountApp(app);
+    await waitFor(() => !!banner());
+
+    click('[data-action="tour-start"]');
+    await waitFor(() => banner()!.classList.contains('valid')); // step 1 genuine
+
+    click('[data-action="tour-next"]'); // step 2 silent tamper (vulnerable, rejected)
+    await waitFor(() => banner()!.classList.contains('rejected'));
+
+    click('[data-action="tour-next"]'); // step 3 alg:none vulnerable (forged)
+    await waitFor(() => banner()!.classList.contains('forged'));
+
+    click('[data-action="tour-next"]'); // step 4 alg:none correct (rejected)
+    await waitFor(() => banner()!.classList.contains('rejected'));
+    expect(app.textContent).toMatch(/step 4 of 7/);
+  });
+});
+
 describe('UI: token-view tabs preserve edits', () => {
   it('keeps draft JSON edits when switching tabs', async () => {
     await mountApp(app);

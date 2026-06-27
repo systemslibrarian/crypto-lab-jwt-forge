@@ -79,7 +79,9 @@ describe('Correct verifier rejects the three forgeries', () => {
   });
 });
 
-describe('Vulnerable verifier is demonstrably fooled', () => {
+// These pin the DELIBERATE vulnerabilities. If a future change "fixes" the Vulnerable
+// verifier, these tests fail on purpose — the teaching contrast must be preserved.
+describe('Vulnerable verifier is demonstrably fooled (DELIBERATE — do not "fix")', () => {
   it('accepts alg:none', async () => {
     const base = await sign({}, baseClaims(), keys.rsaPrivate);
     const { forgedToken } = attackAlgNone(base);
@@ -141,6 +143,39 @@ describe('edge cases fail closed', () => {
     const t = await sign({}, baseClaims(), keys.rsaPrivate);
     const r = await verifyCorrect(t, policy({ acceptedAlgs: new Set() }));
     expect(r.decision).toBe('reject');
+  });
+
+  // header/payload that decode to non-objects (array, number, string) must all reject.
+  it.each([
+    ['array payload', 'eyJhbGciOiJSUzI1NiJ9', 'WzEsMiwzXQ'], // [1,2,3]
+    ['number payload', 'eyJhbGciOiJSUzI1NiJ9', 'NDI'], // 42
+    ['string payload', 'eyJhbGciOiJSUzI1NiJ9', 'ImhpIg'], // "hi"
+  ])('non-object %s => structural reject, no crash', async (_name, h, p) => {
+    const r = await verifyCorrect(`${h}.${p}.x`, policy({}));
+    expect(r.decision).toBe('reject');
+    expect(r.invariantTriggered).toMatch(/structure/);
+  });
+
+  it('array header => structural reject', async () => {
+    // header [1] base64url = "WzFd"
+    const r = await verifyCorrect('WzFd.eyJhIjoxfQ.x', policy({}));
+    expect(r.decision).toBe('reject');
+  });
+
+  it('invalid base64url in header => reject at parse, never verified', async () => {
+    const r = await verifyCorrect('not+valid.eyJhIjoxfQ.x', policy({}));
+    expect(r.decision).toBe('reject');
+    expect(r.signature).toBe('not-checked');
+    expect(r.invariantTriggered).toMatch(/base64url/);
+  });
+
+  it('emits a decision trace with a single decisive step', async () => {
+    const base = await sign({}, baseClaims(), keys.rsaPrivate);
+    const { forgedToken } = attackAlgNone(base);
+    const r = await verifyCorrect(forgedToken, policy({})); // RS256 only → allowlist rejects
+    expect(r.trace.length).toBeGreaterThan(0);
+    expect(r.trace.filter((s) => s.decisive)).toHaveLength(1);
+    expect(r.trace.find((s) => s.decisive)?.status).toBe('fail');
   });
 
   it('unrecognised crit => reject', async () => {
