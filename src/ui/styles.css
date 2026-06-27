@@ -1,13 +1,15 @@
 :root {
-  /* The standardization pass owns the global theme; we only need an accent here. */
-  --accent: #6d5dfc;
+  /* Catalog brand accent for this lab (the shared header tints from this). */
+  --accent: #e0a23b;
 
+  /* Dark is the default theme (the shared-header toggle flips data-theme). */
   --bg: #0f1117;
   --panel: #181b24;
   --panel-2: #1f2330;
   --border: #2c3140;
   --text: #e7e9ee;
   --muted: #9aa1b1;
+  --code-bg: #0a0c12;
 
   /* Semantic colours. Chosen to survive grayscale + deuteranopia:
      forged = high-luminance red/orange, safe = teal-green, distinct in brightness. */
@@ -22,6 +24,33 @@
   --payload-tint: #36d399;
   --sig-tint: #f5c451;
 }
+
+/* Light theme overrides (applied when the shared-header toggle sets data-theme="light").
+   Only colour variables are swapped — layout and the brand accent are unchanged. */
+:root[data-theme='light'] {
+  --accent: #e0a23b;
+
+  --bg: #f6f7f9;
+  --panel: #ffffff;
+  --panel-2: #eef1f5;
+  --border: #d3d9e2;
+  --text: #1a1d24;
+  --muted: #5a6270;
+  --code-bg: #f0f2f6;
+
+  --danger: #c81e1e;
+  --danger-bg: #fce6e6;
+  --safe: #0f7a4f;
+  --safe-bg: #e2f6ed;
+  --calm: #1f6fd0;
+  --calm-bg: #e6f0fb;
+
+  --header-tint: #1f6fd0;
+  --payload-tint: #0f7a4f;
+  --sig-tint: #8a6300;
+}
+
+html, body { background: var(--bg); color: var(--text); margin: 0; }
 
 * { box-sizing: border-box; }
 
@@ -67,7 +96,7 @@
 .raw-token {
   font-family: ui-monospace, "Cascadia Code", "Fira Code", Consolas, monospace;
   font-size: 0.85rem;
-  background: #0a0c12;
+  background: var(--code-bg);
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 0.75rem;
@@ -92,7 +121,7 @@
 .card.signature > .card-h { background: #2e260c; color: var(--sig-tint); }
 .card label { display: block; font-size: 0.75rem; color: var(--muted); padding: 0.4rem 0.6rem 0; }
 .card textarea {
-  width: 100%; border: 0; background: #0a0c12; color: var(--text);
+  width: 100%; border: 0; background: var(--code-bg); color: var(--text);
   font-family: ui-monospace, Consolas, monospace; font-size: 0.82rem;
   padding: 0.5rem 0.6rem; resize: vertical; min-height: 5.5rem;
 }
@@ -163,6 +192,16 @@ a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visib
 
 .table-wrap { overflow-x: auto; }
 
+/* Scripture footer — last visible element, themed via existing variables. */
+.scripture-footer {
+  text-align: center;
+  padding: 2rem 1rem;
+  font-size: 0.85rem;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  margin-top: 2rem;
+}
+
 /* Result banner */
 .banner {
   border-radius: 10px; padding: 1rem 1.1rem; border: 2px solid var(--border);
@@ -193,7 +232,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visib
 .causal h4 { margin: 0 0 0.3rem; font-size: 0.85rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
 .causal .chain { font-family: ui-monospace, Consolas, monospace; font-size: 0.82rem; color: var(--sig-tint); }
 .causal ul { margin: 0.4rem 0 0; padding-left: 1.1rem; }
-.causal code { background: #0a0c12; padding: 0.05em 0.3em; border-radius: 4px; word-break: break-all; }
+.causal code { background: var(--code-bg); padding: 0.05em 0.3em; border-radius: 4px; word-break: break-all; }
 
 /* Screen-reader-only text */
 .sr-only {
