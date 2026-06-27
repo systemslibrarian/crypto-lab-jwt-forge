@@ -18,6 +18,11 @@ beforeAll(() => {
 let app: HTMLElement;
 
 beforeEach(() => {
+  try {
+    location.hash = '';
+  } catch {
+    /* ignore */
+  }
   document.body.innerHTML = '<div id="app"></div>';
   app = document.getElementById('app')!;
 });
@@ -128,6 +133,29 @@ describe('UI: decision trace', () => {
     await waitFor(() => banner()!.classList.contains('rejected'));
     expect(app.querySelectorAll('.trace-step').length).toBeGreaterThan(0);
     expect(app.querySelectorAll('.trace-step.decisive').length).toBe(1);
+  });
+});
+
+describe('UI: shareable scenario link', () => {
+  it('round-trips a forged scenario through the URL hash into a fresh session', async () => {
+    await mountApp(app);
+    await waitFor(() => !!banner());
+
+    click('[data-action="attack-confusion"]'); // confusion, vulnerable → forged
+    await waitFor(() => banner()!.classList.contains('forged'));
+
+    click('[data-action="share"]');
+    expect(location.hash).toMatch(/^#s=/);
+
+    // Remount in a fresh element + fresh session keys, same hash → scenario restores.
+    document.body.innerHTML = '<div id="app"></div>';
+    const app2 = document.getElementById('app')!;
+    await mountApp(app2);
+    await waitFor(() => {
+      const b = app2.querySelector('.banner');
+      return !!b && b.classList.contains('forged');
+    });
+    expect(app2.textContent).toMatch(/FORGED TOKEN ACCEPTED/);
   });
 });
 

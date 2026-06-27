@@ -3,6 +3,7 @@ import { sign } from '../jwt/sign.ts';
 import { verifyCorrect } from '../jwt/verifyCorrect.ts';
 import { verifyVulnerable } from '../jwt/verifyVulnerable.ts';
 import type { AlgName, VerifierPolicy, VerifyResult, VerifierKey, JwtHeader, JwtClaims, SigningKey, TraceStep } from '../jwt/types.ts';
+import { isAlgName } from '../jwt/types.ts';
 import { base64urlDecodeToString, base64urlEncodeString } from '../jwt/base64url.ts';
 import { attackAlgNone } from '../attacks/algNone.ts';
 import { attackKeyConfusion } from '../attacks/keyConfusion.ts';
@@ -11,6 +12,7 @@ import type { AttackExplanation } from '../attacks/types.ts';
 
 type HeldKeyId = 'rsaPublic' | 'hmac' | 'ecPublic';
 type TokenView = 'raw' | 'decoded' | 'diff';
+type ScenarioCode = 'genuine' | 'none' | 'confusion' | 'tamper' | 'token';
 
 interface State {
   keys: SessionKeys;
@@ -33,6 +35,8 @@ interface State {
   compareResults?: { correct: VerifyResult; vulnerable: VerifyResult };
   /** Guided lesson tour; undefined when not active. */
   tourIndex?: number;
+  /** Which scenario produced the current token (for shareable links). */
+  scenario: ScenarioCode;
 }
 
 let state: State;
@@ -75,6 +79,96 @@ function decodeUnsafe(token: string): { header: JwtHeader; claims: JwtClaims; si
     };
   } catch {
     return null;
+  }
+}
+
+// ---- Shareable scenario links --------------------------------------------------
+//
+// Keys are per-session, so we cannot share token *bytes* and expect them to verify in
+// someone else's session. Instead we share a scenario DESCRIPTOR (attack + mode +
+// policy + view) and re-derive the token against the recipient's freshly generated
+// base token — so the alg:none / confusion "aha" reproduces faithfully. Custom tokens
+// (manual edits / paste) fall back to embedding the literal token string.
+
+interface ScenarioPayload {
+  s: ScenarioCode;
+  m: 'c' | 'v';
+  a: string[];
+  k: string;
+  cmp: 0 | 1;
+  v: string;
+  t?: string;
+}
+
+function buildShareUrl(): string {
+  const payload: ScenarioPayload = {
+    s: state.scenario,
+    m: state.mode === 'correct' ? 'c' : 'v',
+    a: [...state.acceptedAlgs],
+    k: state.heldKey,
+    cmp: state.compare ? 1 : 0,
+    v: state.view,
+  };
+  if (state.scenario === 'token') payload.t = state.currentToken;
+  const code = base64urlEncodeString(JSON.stringify(payload));
+  const base = location.href.split('#')[0];
+  return `${base}#s=${code}`;
+}
+
+function readScenarioHash(): ScenarioPayload | null {
+  const m = location.hash.match(/^#s=(.+)$/);
+  if (!m) return null;
+  try {
+    const obj = JSON.parse(base64urlDecodeToString(m[1])) as ScenarioPayload;
+    return obj && typeof obj === 'object' ? obj : null;
+  } catch {
+    return null;
+  }
+}
+
+const HELD_KEYS: HeldKeyId[] = ['rsaPublic', 'hmac', 'ecPublic'];
+const VIEWS: TokenView[] = ['raw', 'decoded', 'diff'];
+const SCENARIOS: ScenarioCode[] = ['genuine', 'none', 'confusion', 'tamper', 'token'];
+
+async function applyScenario(p: ScenarioPayload): Promise<void> {
+  state.mode = p.m === 'v' ? 'vulnerable' : 'correct';
+  if (Array.isArray(p.a)) {
+    const algs = p.a.filter((x): x is AlgName => isAlgName(x));
+    state.acceptedAlgs = new Set<AlgName>(algs);
+  }
+  if (HELD_KEYS.includes(p.k as HeldKeyId)) state.heldKey = p.k as HeldKeyId;
+  if (VIEWS.includes(p.v as TokenView)) state.view = p.v as TokenView;
+  state.compare = p.cmp === 1;
+  state.scenario = SCENARIOS.includes(p.s) ? p.s : 'genuine';
+
+  switch (state.scenario) {
+    case 'none': {
+      const r = attackAlgNone(state.baseToken);
+      state.currentToken = r.forgedToken;
+      state.explanation = r.explanation;
+      break;
+    }
+    case 'confusion': {
+      const r = await attackKeyConfusion(state.baseToken, state.keys.rsaPublicKeyPem);
+      state.currentToken = r.forgedToken;
+      state.explanation = r.explanation;
+      break;
+    }
+    case 'tamper': {
+      const r = attackSilentTamper(state.baseToken);
+      state.currentToken = r.forgedToken;
+      state.explanation = r.explanation;
+      break;
+    }
+    case 'token': {
+      state.currentToken = typeof p.t === 'string' && p.t ? p.t : state.baseToken;
+      state.explanation = undefined;
+      break;
+    }
+    case 'genuine':
+    default:
+      state.currentToken = state.baseToken;
+      state.explanation = undefined;
   }
 }
 
@@ -416,6 +510,7 @@ function renderResultPanel(): void {
       <div class="btn-row">
         <button class="btn secondary" data-action="compare-off">← Back to single verifier</button>
         <button class="btn secondary" data-action="copy-summary">Copy summary</button>
+        <button class="btn secondary" data-action="share">🔗 Copy share link</button>
       </div>`;
     return;
   }
@@ -451,6 +546,7 @@ function renderResultPanel(): void {
       <button class="btn contrast" data-action="contrast" data-mode="${contrastMode}">${contrastLabel}</button>
       <button class="btn secondary" data-action="compare-on">⇄ Compare both side by side</button>
       <button class="btn secondary" data-action="copy-summary">Copy summary</button>
+      <button class="btn secondary" data-action="share">🔗 Copy share link</button>
     </div>`;
 }
 
@@ -479,8 +575,10 @@ async function launchAttack(which: 'none' | 'confusion' | 'tamper'): Promise<voi
     state.acceptedAlgs = new Set<AlgName>(['RS256']);
     state.heldKey = 'rsaPublic';
   }
+  state.scenario = which;
   state.mode = 'vulnerable';
   state.view = 'decoded';
+  state.compare = false;
   clearDrafts();
   renderTokenPanel();
   await runVerification();
@@ -522,6 +620,7 @@ async function resign(): Promise<void> {
   }
   state.currentToken = await sign(header, claims, key);
   state.explanation = undefined;
+  state.scenario = 'token';
   clearDrafts();
   renderTokenPanel();
   await runVerification();
@@ -542,6 +641,7 @@ function tamper(): void {
   }
   const oldSig = state.currentToken.split('.')[2] ?? '';
   state.currentToken = `${base64urlEncodeString(JSON.stringify(header))}.${base64urlEncodeString(JSON.stringify(claims))}.${oldSig}`;
+  state.scenario = 'token';
   clearDrafts();
   state.explanation = {
     title: 'manual tamper',
@@ -563,11 +663,12 @@ interface TourStep {
   setup: () => void | Promise<void>;
 }
 
-function setForgeryScene(): void {
+function setForgeryScene(scenario: ScenarioCode): void {
   state.acceptedAlgs = new Set<AlgName>(['RS256']);
   state.heldKey = 'rsaPublic';
   state.compare = false;
   state.view = 'decoded';
+  state.scenario = scenario;
 }
 
 const tourSteps: TourStep[] = [
@@ -577,7 +678,7 @@ const tourSteps: TourStep[] = [
     setup: () => {
       state.currentToken = state.baseToken;
       state.explanation = undefined;
-      setForgeryScene();
+      setForgeryScene('genuine');
       state.mode = 'correct';
     },
   },
@@ -588,7 +689,7 @@ const tourSteps: TourStep[] = [
       const r = attackSilentTamper(state.baseToken);
       state.currentToken = r.forgedToken;
       state.explanation = r.explanation;
-      setForgeryScene();
+      setForgeryScene('tamper');
       state.mode = 'vulnerable';
     },
   },
@@ -599,7 +700,7 @@ const tourSteps: TourStep[] = [
       const r = attackAlgNone(state.baseToken);
       state.currentToken = r.forgedToken;
       state.explanation = r.explanation;
-      setForgeryScene();
+      setForgeryScene('none');
       state.mode = 'vulnerable';
     },
   },
@@ -610,7 +711,7 @@ const tourSteps: TourStep[] = [
       const r = attackAlgNone(state.baseToken);
       state.currentToken = r.forgedToken;
       state.explanation = r.explanation;
-      setForgeryScene();
+      setForgeryScene('none');
       state.mode = 'correct';
     },
   },
@@ -621,7 +722,7 @@ const tourSteps: TourStep[] = [
       const r = await attackKeyConfusion(state.baseToken, state.keys.rsaPublicKeyPem);
       state.currentToken = r.forgedToken;
       state.explanation = r.explanation;
-      setForgeryScene();
+      setForgeryScene('confusion');
       state.mode = 'vulnerable';
     },
   },
@@ -632,7 +733,7 @@ const tourSteps: TourStep[] = [
       const r = await attackKeyConfusion(state.baseToken, state.keys.rsaPublicKeyPem);
       state.currentToken = r.forgedToken;
       state.explanation = r.explanation;
-      setForgeryScene();
+      setForgeryScene('confusion');
       state.mode = 'correct';
     },
   },
@@ -643,7 +744,7 @@ const tourSteps: TourStep[] = [
       const r = await attackKeyConfusion(state.baseToken, state.keys.rsaPublicKeyPem);
       state.currentToken = r.forgedToken;
       state.explanation = r.explanation;
-      setForgeryScene();
+      setForgeryScene('confusion');
       state.compare = true;
     },
   },
@@ -718,6 +819,7 @@ function onClick(e: MouseEvent): void {
       if (input && input.value.trim()) {
         state.currentToken = input.value.trim();
         state.explanation = undefined;
+        state.scenario = 'token';
         clearDrafts();
         renderTokenPanel();
         void runVerification();
@@ -727,6 +829,7 @@ function onClick(e: MouseEvent): void {
     case 'reset':
       state.currentToken = state.baseToken;
       state.explanation = undefined;
+      state.scenario = 'genuine';
       clearDrafts();
       renderTokenPanel();
       void runVerification();
@@ -769,6 +872,18 @@ function onClick(e: MouseEvent): void {
       void navigator.clipboard?.writeText(buildSummary());
       target.textContent = 'Copied ✓';
       setTimeout(() => (target.textContent = 'Copy summary'), 1200);
+      break;
+    }
+    case 'share': {
+      const url = buildShareUrl();
+      try {
+        location.hash = url.split('#')[1] ?? '';
+      } catch {
+        /* hash assignment can throw in non-browser test envs; ignore */
+      }
+      void navigator.clipboard?.writeText(url);
+      target.textContent = 'Link copied ✓';
+      setTimeout(() => (target.textContent = '🔗 Copy share link'), 1400);
       break;
     }
     case 'verify':
@@ -874,7 +989,18 @@ export async function mountApp(el: HTMLElement): Promise<void> {
     mode: 'correct',
     flashPolicy: false,
     compare: false,
+    scenario: 'genuine',
   };
+
+  // Restore a shared scenario from the URL hash, if present (#s=<base64url>).
+  const shared = readScenarioHash();
+  if (shared) {
+    try {
+      await applyScenario(shared);
+    } catch {
+      /* malformed link → fall back to the default genuine scenario */
+    }
+  }
 
   renderTour();
   renderTokenPanel();
