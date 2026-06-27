@@ -1,4 +1,4 @@
-# JWT Forge
+# crypto-lab-jwt-forge
 
 ## What It Is
 
@@ -41,6 +41,21 @@ side-by-side comparison, a step-by-step decision trace, a guided tour, and share
 links. This demo verifies **signatures only**; it does not encrypt or decrypt anything, and
 all keys are generated in your browser per session and never leave the page.
 
+## What Can Go Wrong
+
+- Trusting the token's own `alg` header lets an attacker set `alg:none` and strip the signature entirely.
+- HS/RS key confusion: a verifier that handles all algorithms in one path can be tricked into verifying an HS256 token using the RSA *public* key as the HMAC secret, letting anyone forge tokens.
+- Treating a signed JWT as confidential — JWS signs but does not encrypt, so the base64url payload is readable by anyone who holds the token.
+- A valid signature is not authorization — skipping expiry, audience, or issuer claim checks lets stale or misdirected tokens through.
+- Weak or shared HS256 secrets can be brute-forced offline once a single token is captured.
+
+## Real-World Usage
+
+- Bearer tokens for stateless API and service-to-service authentication (OAuth 2.0 and OpenID Connect ID tokens).
+- Session and access tokens in single-page apps and mobile clients.
+- Asymmetric signing (RS256/ES256) where one identity provider mints tokens and many resource servers verify them with the public key.
+- The `alg:none` and key-confusion bugs are a real, repeatedly rediscovered class of vulnerability in JWT libraries and deployments.
+
 ## How to Run Locally
 
 ```bash
@@ -50,14 +65,16 @@ npm install
 npm run dev
 ```
 
-No environment variables are required — everything runs client-side with no backend.
+## Related Demos
 
-## Part of the Crypto-Lab Suite
-
-> One of 100+ live browser demos at
-> [systemslibrarian.github.io/crypto-lab](https://systemslibrarian.github.io/crypto-lab/)
-> — spanning Atbash (600 BCE) through NIST FIPS 203/204/205 (2024).
+- [crypto-lab-ecdsa-forge](https://systemslibrarian.github.io/crypto-lab-ecdsa-forge/) — the ES256 signature scheme and how nonce reuse forges it.
+- [crypto-lab-rsa-forge](https://systemslibrarian.github.io/crypto-lab-rsa-forge/) — the RS256 primitive with its OAEP/PSS/PKCS#1 attacks.
+- [crypto-lab-ed25519-forge](https://systemslibrarian.github.io/crypto-lab-ed25519-forge/) — a modern signature scheme and the verification subtleties that bite implementers.
+- [crypto-lab-timing-oracle](https://systemslibrarian.github.io/crypto-lab-timing-oracle/) — why HMAC and signature checks must be constant-time.
+- [crypto-lab-padding-oracle](https://systemslibrarian.github.io/crypto-lab-padding-oracle/) — another structural verification bug exploited a byte at a time.
 
 ---
 
-*"Whether you eat or drink, or whatever you do, do all to the glory of God." — 1 Corinthians 10:31*
+*One of 60+ browser demos in the [Crypto Lab](https://crypto-lab.systemslibrarian.dev/) suite.*
+
+*"So whether you eat or drink or whatever you do, do it all for the glory of God." — 1 Corinthians 10:31*
