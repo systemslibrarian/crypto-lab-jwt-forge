@@ -932,14 +932,17 @@ export async function mountApp(el: HTMLElement): Promise<void> {
   root = el;
   el.innerHTML = `
     <div class="lab">
-      <div class="intro">
-        <h1>JWT Forge — a JWS signature-verification playground</h1>
-        <p>Decode a token, mutate it, swap its algorithm, and run two canonical structural attacks
-        (<code>alg:none</code> and RS/HS key confusion) against a <strong>Correct</strong> verifier and a
-        deliberately <strong>Vulnerable</strong> one. Colour tracks <em>system integrity</em>: red means a
-        forgery was accepted, green means the system held. Everything runs in your browser; keys are
-        generated per session and never leave the page.</p>
-      </div>
+      <header class="cl-hero">
+        <div class="cl-hero-main">
+          <h1 class="cl-hero-title">JWT Forge</h1>
+          <p class="cl-hero-sub">JWS/JWT · alg:none · RS/HS confusion</p>
+          <p class="cl-hero-desc">Decode a token, swap its <code>alg</code>, and run the two classic structural forgeries against a Correct verifier and a deliberately Vulnerable one, side by side.</p>
+        </div>
+        <aside class="cl-hero-why" aria-label="Why it matters">
+          <span class="cl-hero-why-label">WHY IT MATTERS</span>
+          <p class="cl-hero-why-text">A verifier that trusts the token's own header to pick the algorithm or key can be tricked into accepting forged JWTs — bypassing authentication entirely. These are among the most-exploited bugs in real auth stacks.</p>
+        </aside>
+      </header>
       <section class="panel" id="tour"></section>
       <section class="panel" id="token-panel"></section>
       <section class="panel" id="policy-panel"></section>

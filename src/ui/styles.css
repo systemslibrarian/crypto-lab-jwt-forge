@@ -80,9 +80,18 @@ html, body { background-color: var(--bg); color: var(--text); margin: 0; }
 
 .lab { display: grid; gap: 1rem; }
 
-.intro { color: var(--muted); font-size: 0.95rem; line-height: 1.5; }
-.intro h1 { color: var(--text); font-size: 1.4rem; margin: 0 0 0.25rem; }
-.intro code { background-color: var(--panel-2); padding: 0.1em 0.35em; border-radius: 4px; }
+/* BEGIN cl-hero standard — managed, keep in sync across fleet */
+.cl-hero{display:flex;align-items:flex-start;justify-content:space-between;gap:clamp(1rem,4vw,3rem);flex-wrap:wrap;margin:clamp(1rem,3vw,2rem) 0 1.5rem;}
+.cl-hero-main{flex:1 1 22rem;min-width:min(100%,20rem);}
+.cl-hero-title{margin:0;font-size:clamp(1.6rem,3.8vw,2.7rem);font-weight:700;line-height:1.1;letter-spacing:.01em;color:var(--text);}
+.cl-hero-sub{margin:.4rem 0 0;font-size:clamp(.9rem,1.6vw,1.05rem);letter-spacing:.01em;opacity:.85;color:var(--text);}
+.cl-hero-desc{margin:.55rem 0 0;font-size:1rem;line-height:1.5;color:var(--muted);max-width:60ch;}
+.cl-hero-desc code{background-color:var(--panel-2);padding:0.1em 0.35em;border-radius:4px;}
+.cl-hero-why{flex:0 1 min(40%,26rem);min-width:min(100%,15rem);border:1px solid var(--border);border-radius:10px;padding:.85rem 1.05rem;background:color-mix(in oklab,var(--accent) 6%,transparent);}
+.cl-hero-why-label{display:block;font-size:.68rem;font-weight:700;letter-spacing:.14em;color:var(--text);}
+.cl-hero-why-text{margin:.35rem 0 0;font-size:.95rem;line-height:1.5;color:var(--text);}
+@media (max-width:640px){.cl-hero{flex-direction:column;}.cl-hero-why{flex-basis:auto;width:100%;}}
+/* END cl-hero standard */
 
 .panel {
   background-color: var(--panel);
@@ -325,7 +334,6 @@ a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visib
   .card textarea, #paste-input { font-size: 16px; }
   .status-row { flex-direction: column; gap: 0.1rem; }
   .status-row .k { min-width: 0; }
-  .intro h1 { font-size: 1.2rem; }
 }
 
 /* Respect reduced-motion preferences (vestibular safety). */
