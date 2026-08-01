@@ -22,7 +22,9 @@ describe('base64url round-trip', () => {
   });
 
   it('encodes a known JWT header vector', () => {
-    // {"alg":"HS256","typ":"JWT"} -> RFC 7515 well-known vector
+    // {"alg":"HS256","typ":"JWT"} -> the ubiquitous JWT header encoding.
+    // (Not the RFC 7515 A.1 vector, which encodes {"typ":"JWT",CRLF "alg":"HS256"}
+    // as eyJ0eXAiOiJKV1QiLA0KICJhbGciOiJIUzI1NiJ9.)
     expect(base64urlEncodeString('{"alg":"HS256","typ":"JWT"}')).toBe(
       'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9',
     );
