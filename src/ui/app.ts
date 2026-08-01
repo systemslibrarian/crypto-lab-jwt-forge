@@ -309,7 +309,7 @@ function renderDiff(): string {
   }
   return `
     <p class="hint">Differences between the genuine base token and the token under inspection. “I tampered and it still verified” becomes visible here.</p>
-    <div class="table-wrap">
+    <div class="table-wrap" tabindex="0" role="region" aria-label="Token differences (scrollable)">
       <table class="diff-table">
         <thead><tr><th>field</th><th>genuine</th><th>current</th></tr></thead>
         <tbody>${rows.join('')}</tbody>
@@ -427,7 +427,7 @@ function renderTrace(trace: TraceStep[]): string {
       </li>`,
     )
     .join('');
-  return `<div class="trace"><h4>Decision trace <span class="hint" style="margin:0">(token alg → policy → key type → signature → claims)</span></h4><ol class="trace-list">${rows}</ol></div>`;
+  return `<div class="trace"><h3>Decision trace <span class="hint" style="margin:0">(token alg → policy → key type → signature → claims)</span></h3><ol class="trace-list">${rows}</ol></div>`;
 }
 
 function causalBlock(): string {
@@ -435,7 +435,7 @@ function causalBlock(): string {
   const ex = state.explanation;
   return `
     <div class="causal">
-      <h4>${esc(ex.title)} — causal chain</h4>
+      <h3>${esc(ex.title)} — causal chain</h3>
       <div class="chain">${esc(ex.whyItPassed)}</div>
       <ul>
         <li><strong>Verifier mistake:</strong> ${esc(ex.verifierMistake)}</li>
@@ -931,7 +931,7 @@ function onInput(e: Event): void {
 export async function mountApp(el: HTMLElement): Promise<void> {
   root = el;
   el.innerHTML = `
-    <div class="lab">
+    <main class="lab">
       <header class="cl-hero">
         <div class="cl-hero-main">
           <h1 class="cl-hero-title">JWT Forge</h1>
@@ -969,7 +969,7 @@ export async function mountApp(el: HTMLElement): Promise<void> {
           </div>
         </div>
       </section>
-    </div>`;
+    </main>`;
 
   el.addEventListener('click', onClick);
   el.addEventListener('input', onInput);

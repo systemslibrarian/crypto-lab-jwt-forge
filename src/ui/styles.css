@@ -80,7 +80,6 @@ html, body { background-color: var(--bg); color: var(--text); margin: 0; }
 
 .lab { display: grid; gap: 1rem; }
 
-/* BEGIN cl-hero standard — managed, keep in sync across fleet */
 .cl-hero{display:flex;align-items:flex-start;justify-content:space-between;gap:clamp(1rem,4vw,3rem);flex-wrap:wrap;margin:clamp(1rem,3vw,2rem) 0 1.5rem;}
 .cl-hero-main{flex:1 1 22rem;min-width:min(100%,20rem);}
 .cl-hero-title{margin:0;font-size:clamp(1.6rem,3.8vw,2.7rem);font-weight:700;line-height:1.1;letter-spacing:.01em;color:var(--text);}
@@ -90,8 +89,7 @@ html, body { background-color: var(--bg); color: var(--text); margin: 0; }
 .cl-hero-why{flex:0 1 min(40%,26rem);min-width:min(100%,15rem);border:1px solid var(--border);border-radius:10px;padding:.85rem 1.05rem;background:color-mix(in oklab,var(--accent) 6%,transparent);}
 .cl-hero-why-label{display:block;font-size:.68rem;font-weight:700;letter-spacing:.14em;color:var(--text);}
 .cl-hero-why-text{margin:.35rem 0 0;font-size:.95rem;line-height:1.5;color:var(--text);}
-@media (max-width:640px){.cl-hero{flex-direction:column;}.cl-hero-why{flex-basis:auto;width:100%;}}
-/* END cl-hero standard */
+@media (max-width:640px){.cl-hero{flex-direction:column;}.cl-hero-why{flex-basis:auto;width:100%;}.cl-hero-main{flex-basis:auto;min-width:0;}}
 
 .panel {
   background-color: var(--panel);
@@ -114,6 +112,8 @@ html, body { background-color: var(--bg); color: var(--text); margin: 0; }
 .tab {
   background-color: var(--panel-2); color: var(--text); border: 1px solid var(--border);
   padding: 0.35rem 0.8rem; border-radius: 999px; cursor: pointer; font-size: 0.85rem;
+  /* WCAG 2.5.5 target size — tabs are primary controls, not inline prose links. */
+  min-height: 44px; min-width: 44px;
 }
 .tab[aria-selected="true"] { background-color: var(--accent); border-color: var(--accent); color: #2a2206; }
 
@@ -180,6 +180,7 @@ legend { font-size: 0.82rem; color: var(--muted); padding: 0 0.3rem; }
 .mode-toggle .seg { display: flex; border: 1px solid var(--border); border-radius: 999px; overflow: hidden; }
 .mode-toggle button {
   background-color: var(--panel-2); color: var(--text); border: 0; padding: 0.4rem 0.9rem; cursor: pointer; font-size: 0.85rem;
+  min-height: 44px;
 }
 .mode-toggle button[aria-pressed="true"][data-mode="correct"] { background-color: var(--safe); color: var(--safe-ink); font-weight: 700; }
 .mode-toggle button[aria-pressed="true"][data-mode="vulnerable"] { background-color: var(--danger); color: var(--danger-ink); font-weight: 700; }
@@ -192,6 +193,7 @@ legend { font-size: 0.82rem; color: var(--muted); padding: 0 0.3rem; }
 button.btn, .launchers button {
   background-color: var(--accent); color: #2a2206; border: 0; border-radius: 8px;
   padding: 0.5rem 0.9rem; cursor: pointer; font-size: 0.88rem;
+  min-height: 44px;
 }
 button.btn.secondary { background-color: var(--panel-2); color: var(--text); border: 1px solid var(--border); }
 button.btn.contrast { background-color: var(--sig-tint); color: var(--sig-ink); font-weight: 700; }
@@ -254,7 +256,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visib
   margin-top: 0.9rem; padding: 0.7rem 0.8rem; border-radius: 8px;
   background-color: var(--panel-2); border: 1px solid var(--border); font-size: 0.88rem;
 }
-.causal h4 { margin: 0 0 0.3rem; font-size: 0.85rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.causal h3 { margin: 0 0 0.3rem; font-size: 0.85rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
 .causal .chain { font-family: ui-monospace, Consolas, monospace; font-size: 0.82rem; color: var(--sig-tint); }
 .causal ul { margin: 0.4rem 0 0; padding-left: 1.1rem; }
 .causal code { background-color: var(--code-bg); padding: 0.05em 0.3em; border-radius: 4px; word-break: break-all; }
@@ -267,7 +269,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visib
 
 /* Decision trace */
 .trace { margin-top: 0.9rem; }
-.trace h4 { margin: 0 0 0.4rem; font-size: 0.85rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.trace h3 { margin: 0 0 0.4rem; font-size: 0.85rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
 .trace-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.3rem; counter-reset: step; }
 .trace-step {
   display: flex; gap: 0.55rem; align-items: flex-start;
