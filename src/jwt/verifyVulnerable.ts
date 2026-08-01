@@ -9,7 +9,9 @@
  *   2. When the token claims HS256 but the verifier holds an RSA/EC PUBLIC key, it
  *      treats the public key's bytes as an HMAC shared secret — the RS/HS confusion.
  *
- * It also ignores the application's allowlist, trusting whatever the token claims.
+ * It also ignores the application's allowlist, trusting whatever the token claims — so
+ * an accept of an alg the policy forbade is reported as `fooledBy: 'allowlist-bypass'`
+ * rather than as an ordinary clean verification.
  */
 
 import { base64urlDecodeToBytes, utf8 } from './base64url.ts';
@@ -68,20 +70,38 @@ export async function verifyVulnerable(
   const data = utf8(signingInput);
 
   // The defining bug: routine is chosen from the TOKEN's alg (attacker-controlled).
-  step('Allowlist enforced?', 'fail', 'BUG: no allowlist check — the token is trusted to name its own alg', false);
+  // `algAllowed` is never consulted to make a decision here — that IS the bug — but we
+  // record it so an acceptance outside the policy is reported as a bypass rather than
+  // as "all checks passed".
+  const algAllowed = policy.acceptedAlgs.has(claimedAlg);
+  step(
+    'Allowlist enforced?',
+    'fail',
+    `BUG: no allowlist check — the token is trusted to name its own alg (policy allows: ${[...policy.acceptedAlgs].join(', ') || 'nothing'})`,
+    false,
+  );
   step('Routine chosen from token alg?', 'fail', `BUG: dispatching on token alg "${claimedAlg}" instead of the held key type`, false);
 
-  // BUG #1: honour alg:none — no signature required.
+  // BUG #1: honour alg:none — no signature required. Note that the bug here is the
+  // SIGNATURE handling: exp/nbf are still evaluated, exactly as on the other paths, so
+  // an accept never silently covers for an expired token.
   if (claimedAlg === 'none') {
     step('alg:none → skip signature check', 'fail', 'BUG: no signature is verified; the token is accepted as-is', true);
+    const claimCheck = validateClaims(claims, policy.nowSeconds);
+    const accepted = claimCheck.status === 'valid';
+    step('Claims (exp/nbf) valid?', accepted ? 'pass' : 'fail', claimCheck.detail, !accepted);
     return {
-      systemIntegrity: 'fooled',
-      decision: 'accept',
-      reason: 'BUG: the token says alg:none, so this verifier skipped signature checking entirely and accepted it',
+      systemIntegrity: accepted ? 'fooled' : 'ok',
+      decision: accepted ? 'accept' : 'reject',
+      reason: accepted
+        ? 'BUG: the token says alg:none, so this verifier skipped signature checking entirely and accepted it'
+        : `no signature was checked (alg:none) and ${claimCheck.detail}`,
       invariantTriggered: 'none (this path should not exist)',
       signature: 'not-checked',
-      claims: validateClaims(claims, policy.nowSeconds).status,
+      claims: claimCheck.status,
+      claimDetail: claimCheck.detail,
       claimedAlg,
+      fooledBy: accepted ? 'alg-none' : undefined,
       trace,
     };
   }
@@ -109,7 +129,7 @@ export async function verifyVulnerable(
     if (hmacKey) {
       step('HS256 → HMAC with held secret', 'info', 'genuine shared secret available', false);
       const ok = await subtle.verify('HMAC', hmacKey.key, signatureBytes, data);
-      return finishSig(trace, step, ok, false, claims, policy, claimedAlg, 'HMAC with the genuine shared secret');
+      return finishSig(trace, step, ok, false, claims, policy, claimedAlg, 'HMAC with the genuine shared secret', algAllowed);
     }
     const pub = policy.keys.find(
       (k): k is Extract<VerifierKey, { kind: 'RsaPublicKey' | 'EcPublicKey' }> =>
@@ -135,6 +155,7 @@ export async function verifyVulnerable(
       policy,
       claimedAlg,
       `HMAC using the ${pub.kind} PEM bytes as the secret (RS/HS confusion)`,
+      algAllowed,
     );
   }
 
@@ -142,14 +163,14 @@ export async function verifyVulnerable(
     const rsa = policy.keys.find((k) => k.kind === 'RsaPublicKey');
     if (!rsa) return rejectNoKey(trace, step, claimedAlg);
     const ok = await subtle.verify('RSASSA-PKCS1-v1_5', rsa.key, signatureBytes, data);
-    return finishSig(trace, step, ok, false, claims, policy, claimedAlg, 'RSASSA-PKCS1-v1_5 with the RSA public key');
+    return finishSig(trace, step, ok, false, claims, policy, claimedAlg, 'RSASSA-PKCS1-v1_5 with the RSA public key', algAllowed);
   }
 
   if (claimedAlg === 'ES256') {
     const ec = policy.keys.find((k) => k.kind === 'EcPublicKey');
     if (!ec) return rejectNoKey(trace, step, claimedAlg);
     const ok = await subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, ec.key, signatureBytes, data);
-    return finishSig(trace, step, ok, false, claims, policy, claimedAlg, 'ECDSA P-256 with the EC public key');
+    return finishSig(trace, step, ok, false, claims, policy, claimedAlg, 'ECDSA P-256 with the EC public key', algAllowed);
   }
 
   return rejectNoKey(trace, step, claimedAlg);
@@ -179,6 +200,7 @@ function finishSig(
   policy: VerifierPolicy,
   claimedAlg: AlgName,
   routineDescription: string,
+  algAllowed: boolean,
 ): VerifyResult {
   if (!sigOk) {
     step('Signature valid?', 'fail', routineDescription, true);
@@ -196,19 +218,35 @@ function finishSig(
   const claimCheck = validateClaims(claims, policy.nowSeconds);
   const accepted = claimCheck.status === 'valid';
   step('Claims (exp/nbf) valid?', accepted ? 'pass' : 'fail', claimCheck.detail, !accepted);
+  // Skipping the allowlist is one of this verifier's bugs, so an acceptance of an alg
+  // the application forbade is a real bypass — it must not be reported as a clean
+  // "valid signature; all checks passed", because the allowlist check never ran.
+  const bypassedAllowlist = accepted && !viaConfusion && !algAllowed;
+  if (bypassedAllowlist) {
+    step(
+      'Alg was on the application allowlist?',
+      'fail',
+      `BUG: alg "${claimedAlg}" is NOT allowlisted, but this verifier never looked — accepted anyway`,
+      true,
+    );
+  }
   return {
-    // It was fooled only if it actually accepted a token via the confusion path.
-    systemIntegrity: viaConfusion && accepted ? 'fooled' : 'ok',
+    // It was fooled if it accepted via the confusion path, or accepted an alg the
+    // application's policy forbade.
+    systemIntegrity: (viaConfusion || bypassedAllowlist) && accepted ? 'fooled' : 'ok',
     decision: accepted ? 'accept' : 'reject',
     reason: accepted
       ? viaConfusion
         ? `BUG: signature "verified" via ${routineDescription} — a public value was used as a secret`
-        : `valid signature (${routineDescription}); claims passed`
+        : bypassedAllowlist
+          ? `BUG: signature verified (${routineDescription}) and claims passed, but alg ${JSON.stringify(claimedAlg)} is NOT in the application's allowlist — this verifier never checked`
+          : `valid signature (${routineDescription}); claims passed`
       : `signature valid (${routineDescription}) but ${claimCheck.detail}`,
     signature: 'valid',
     claims: claimCheck.status,
     claimDetail: claimCheck.detail,
     claimedAlg,
+    fooledBy: accepted ? (viaConfusion ? 'key-confusion' : bypassedAllowlist ? 'allowlist-bypass' : undefined) : undefined,
     trace,
   };
 }

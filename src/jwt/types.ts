@@ -115,7 +115,8 @@ export interface TraceStep {
  * `systemIntegrity` tracks whether the verifier was FOOLED, not whether it returned
  * accept/reject. The Correct verifier can never be fooled, so it always reports `ok`.
  * The Vulnerable verifier reports `fooled` whenever it accepts a token through one of
- * its broken paths (honouring `alg:none`, or treating a public key as an HMAC secret).
+ * its broken paths (honouring `alg:none`, treating a public key as an HMAC secret, or
+ * accepting an `alg` the application's allowlist forbade).
  *
  * Invariant #5: signature validity and claim validity are reported separately and
  * never collapsed. A valid signature on an expired token is signature='valid',
@@ -131,6 +132,13 @@ export interface VerifyResult {
   claimDetail?: string;
   /** The `alg` the token claimed (for the UI's causal chain), if it parsed. */
   claimedAlg?: AlgName;
+  /**
+   * Which broken path did the fooling, when `systemIntegrity === 'fooled'`. The UI words
+   * its banner from this: "FORGED TOKEN ACCEPTED" is only truthful when a signature was
+   * forged or skipped. An allowlist bypass accepts a token that is genuinely signed but
+   * that the application's policy forbade — a different failure, so a different headline.
+   */
+  fooledBy?: 'alg-none' | 'key-confusion' | 'allowlist-bypass';
   /** Step-by-step decision pipeline, for the visual trace. */
   trace: TraceStep[];
 }

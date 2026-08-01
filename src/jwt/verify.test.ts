@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { generateSessionKeys, type SessionKeys } from './keys.ts';
-import { sign } from './sign.ts';
+import { sign, signNone } from './sign.ts';
 import { verifyCorrect } from './verifyCorrect.ts';
 import { verifyVulnerable } from './verifyVulnerable.ts';
 import type { VerifierPolicy, JwtClaims } from './types.ts';
@@ -122,6 +122,50 @@ describe('signature and claim validity are reported independently (invariant #5)
     expect(r.signature).toBe('valid');
     expect(r.claims).toBe('invalid');
     expect(r.claimDetail).toMatch(/not yet valid/);
+  });
+});
+
+// An accept must never be reported in terms the run does not support. These pin the
+// three places where the reported verdict used to overstate what was actually checked.
+describe('an accept never overstates what was checked', () => {
+  it('an explicitly allowlisted alg:none accept reports signature not-checked (nothing was verified)', async () => {
+    const base = await sign({}, baseClaims(), keys.rsaPrivate);
+    const { forgedToken } = attackAlgNone(base);
+    const r = await verifyCorrect(forgedToken, policy({ acceptedAlgs: new Set(['RS256', 'none']) }));
+    expect(r.decision).toBe('accept');
+    // Not 'valid': an unsecured JWS has an empty signature segment, so the UI must not
+    // print "Valid signature — all checks passed" over it.
+    expect(r.signature).toBe('not-checked');
+    expect(r.reason).toMatch(/NO signature was checked/i);
+  });
+
+  it('the Vulnerable verifier still rejects an EXPIRED alg:none token (its bug is signature-only)', async () => {
+    const expired = signNone({ typ: 'JWT' }, { ...baseClaims(), exp: NOW - 10 });
+    const r = await verifyVulnerable(expired, policy({}));
+    expect(r.decision).toBe('reject');
+    expect(r.claims).toBe('invalid');
+    expect(r.systemIntegrity).toBe('ok');
+  });
+
+  it('the Vulnerable verifier accepting an alg the policy forbids is reported as an allowlist bypass', async () => {
+    // Genuine HS256 token, genuine HMAC key held — the signature really does verify.
+    // But the application's allowlist says RS256 only, and this verifier never looks.
+    const t = await sign({}, baseClaims(), keys.hmac);
+    const r = await verifyVulnerable(t, policy({ keys: [keys.hmac] }));
+    expect(r.decision).toBe('accept');
+    expect(r.signature).toBe('valid');
+    expect(r.systemIntegrity).toBe('fooled');
+    expect(r.fooledBy).toBe('allowlist-bypass');
+    // The Correct verifier, same token, same policy, refuses it.
+    expect((await verifyCorrect(t, policy({ keys: [keys.hmac] }))).decision).toBe('reject');
+  });
+
+  it('an in-policy, genuinely signed token is still a clean accept (no false alarm)', async () => {
+    const t = await sign({}, baseClaims(), keys.hmac);
+    const r = await verifyVulnerable(t, policy({ acceptedAlgs: new Set(['HS256']), keys: [keys.hmac] }));
+    expect(r.decision).toBe('accept');
+    expect(r.systemIntegrity).toBe('ok');
+    expect(r.fooledBy).toBeUndefined();
   });
 });
 

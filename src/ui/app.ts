@@ -343,7 +343,11 @@ function renderPolicyPanel(): void {
 
   panel.innerHTML = `
     <h2>2 · Verifier policy <span class="tip" title="The conceptual heart: the application — not the token — decides what is acceptable.">ⓘ</span></h2>
-    <p class="hint">The verifier never reads the token's <code>alg</code> to choose a routine. The application sets the policy below; the token is judged against it.</p>
+    <p class="hint">${
+      state.mode === 'correct'
+        ? `The <strong>Correct</strong> verifier never reads the token's <code>alg</code> to choose a routine. The application sets the policy below; the token is judged against it.`
+        : `The <strong>Vulnerable</strong> verifier ignores the policy below: it reads the token's <code>alg</code> to choose its routine and never consults this allowlist. Switch to Correct to see the policy actually enforced.`
+    }</p>
 
     <fieldset id="alg-fieldset" class="${state.flashPolicy ? 'flash' : ''}">
       <legend>Accepted algorithms (required allowlist — empty = accept nothing)</legend>
@@ -400,10 +404,22 @@ function pill(label: string, status: 'valid' | 'invalid' | 'not-checked'): strin
 
 function bannerParts(r: VerifyResult): { cls: string; icon: string; headline: string } {
   // Colour tracks SYSTEM INTEGRITY, not the raw accept/reject.
+  //
+  // Every headline below is derived from what the verifier actually reported. In
+  // particular "Valid signature — all checks passed" is only ever printed when a
+  // signature really was checked and really did verify (r.signature === 'valid'):
+  // an accepted alg:none token has no signature at all, and an allowlist bypass
+  // skipped a check, so neither may claim that all checks passed.
   if (r.systemIntegrity === 'fooled' && r.decision === 'accept') {
+    if (r.fooledBy === 'allowlist-bypass') {
+      return { cls: 'forged', icon: '⚠', headline: 'ACCEPTED OUTSIDE THE POLICY ALLOWLIST' };
+    }
     return { cls: 'forged', icon: '⚠', headline: 'FORGED TOKEN ACCEPTED' };
   }
   if (r.decision === 'accept') {
+    if (r.signature === 'not-checked') {
+      return { cls: 'forged', icon: '⚠', headline: 'ACCEPTED UNSECURED — NO SIGNATURE WAS CHECKED' };
+    }
     return { cls: 'valid', icon: '✓', headline: 'Valid signature — all checks passed' };
   }
   return { cls: 'rejected', icon: '✓', headline: state.explanation ? 'REJECTED AS EXPECTED' : 'Rejected' };

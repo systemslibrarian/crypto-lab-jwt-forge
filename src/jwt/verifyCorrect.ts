@@ -108,7 +108,7 @@ export async function verifyCorrect(
       step('alg:none has empty signature?', 'fail', 'a none token must carry no signature', true);
       return fail("alg 'none' must carry an empty signature", 'alg:none requires empty signature', claimedAlg);
     }
-    step('Signature', 'info', 'alg:none → UNSECURED token, signature check is vacuous (explicitly allowlisted)');
+    step('Signature', 'info', 'alg:none → UNSECURED token; there is no signature, so nothing was verified (explicitly allowlisted)');
     const claimCheck = validateClaims(claims, policy.nowSeconds);
     step('Claims (exp/nbf) valid?', claimCheck.status === 'valid' ? 'pass' : 'fail', claimCheck.detail, claimCheck.status !== 'valid');
     return {
@@ -116,9 +116,12 @@ export async function verifyCorrect(
       decision: claimCheck.status === 'valid' ? 'accept' : 'reject',
       reason:
         claimCheck.status === 'valid'
-          ? 'alg:none explicitly allowlisted by the application — accepted as an UNSECURED token'
+          ? 'alg:none explicitly allowlisted by the application — accepted as an UNSECURED token; NO signature was checked'
           : `unsecured token but ${claimCheck.detail}`,
-      signature: 'valid',
+      // An unsecured JWS carries no signature, so nothing was verified. Reporting
+      // 'valid' here made the UI print "Valid signature — all checks passed" over a
+      // token whose signature segment is empty. 'not-checked' is the truth.
+      signature: 'not-checked',
       claims: claimCheck.status,
       claimDetail: claimCheck.detail,
       claimedAlg,
