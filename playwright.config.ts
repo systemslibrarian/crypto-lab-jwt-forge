@@ -16,12 +16,12 @@ export default defineConfig({
     // dist/; without the build in front, a failing build leaves the previous
     // good bundle on disk and the suite passes green against code that no
     // longer compiles — silently invalidating mutation checks.
-    command: 'npm run build && npm run preview -- --port 4221 --strictPort',
-    url: 'http://localhost:4221/crypto-lab-jwt-forge/',
+    command: 'npm run build && npm run preview -- --port 4655 --strictPort',
+    url: 'http://localhost:4655/crypto-lab-jwt-forge/',
     reuseExistingServer: !process.env.CI,
   },
   use: {
-    baseURL: 'http://localhost:4221/crypto-lab-jwt-forge/',
+    baseURL: 'http://localhost:4655/crypto-lab-jwt-forge/',
     colorScheme: 'dark',
   },
 });
