@@ -18,7 +18,6 @@ async function neutralizeMotion(page: Page): Promise<void> {
     content: `*, *::before, *::after {
       animation: none !important;
       transition: none !important;
-      opacity: 1 !important;
     }`,
   });
 }
