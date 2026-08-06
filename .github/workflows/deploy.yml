@@ -33,7 +33,7 @@ jobs:
       # attacks and counters this lab teaches) and a11y.spec.ts (axe WCAG A/AA).
       - name: Browser gate (functional claims + axe WCAG A/AA)
         run: npm run test:e2e
-      - uses: actions/configure-pages@v5
+      - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
