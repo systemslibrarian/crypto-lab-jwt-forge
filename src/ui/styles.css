@@ -78,7 +78,13 @@ html, body { background-color: var(--bg); color: var(--text); margin: 0; }
   padding: 1rem;
 }
 
-.lab { display: grid; gap: 1rem; }
+/* `minmax(0, 1fr)`, not the default `auto` track: an auto track takes its
+   minimum from the widest item's min-content, and a JWT is one unbroken base64
+   string rendered `white-space: pre` in .raw-token. That single token was
+   sizing the whole column — the page grew to 4103px at a 1280px viewport, and
+   .raw-token's own `overflow-x: auto` never got to scroll because nothing
+   constrained it. Flooring the track at 0 puts the scrolling back in the token. */
+.lab { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; }
 
 .cl-hero{display:flex;align-items:flex-start;justify-content:space-between;gap:clamp(1rem,4vw,3rem);flex-wrap:wrap;margin:clamp(1rem,3vw,2rem) 0 1.5rem;}
 .cl-hero-main{flex:1 1 22rem;min-width:min(100%,20rem);}

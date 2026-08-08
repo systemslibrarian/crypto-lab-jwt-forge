@@ -220,7 +220,7 @@ function renderTokenPanel(): void {
   if (state.view === 'raw') {
     const [h, p, s] = state.currentToken.split('.');
     body = `
-      <div class="raw-token" tabindex="0" aria-label="Raw JWT">
+      <div class="raw-token" role="region" tabindex="0" aria-label="Raw JWT">
 <span class="seg-h">${esc(h ?? '')}</span><span class="dot">.</span><span class="seg-p">${esc(p ?? '')}</span><span class="dot">.</span><span class="seg-s">${esc(s ?? '')}</span></div>
       <div class="btn-row">
         <button class="btn secondary" data-action="copy">Copy token</button>
