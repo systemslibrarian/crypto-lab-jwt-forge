@@ -19,7 +19,6 @@ export const NONTEXT_BASELINE: Record<
 > = {
   "control-boundary|a.cl-btn": { ratio: 2.19, required: 3.0, unverified: false },
   "control-boundary|button": { ratio: 1.1, required: 3.0, unverified: false },
-  "control-boundary|button.btn": { ratio: 2.23, required: 3.0, unverified: false },
   "control-boundary|button.btn.secondary": { ratio: 1.33, required: 3.0, unverified: false },
   "control-boundary|button.tab": { ratio: 1.33, required: 3.0, unverified: false },
   "control-boundary|textarea#ta-header": { ratio: 1.12, required: 3.0, unverified: false },
