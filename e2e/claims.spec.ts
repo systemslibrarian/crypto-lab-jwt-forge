@@ -697,12 +697,39 @@ test('the copied summary says the same thing the result panel says', async ({ pa
   expect(summary).toContain(`Reason: ${reason}`);
 });
 
-test('nothing leaves the page: no third-party requests, no persisted key material', async ({ page }) => {
+function belongsToPage(resourceURL: string, pageURL: string): boolean {
+  const resource = new URL(resourceURL);
+  if (resource.protocol === 'data:') return true;
+  return ['http:', 'https:', 'blob:'].includes(resource.protocol)
+    && resource.origin === new URL(pageURL).origin;
+}
+
+test('privacy request boundary distinguishes own resources from external destinations', () => {
+  for (const origin of ['http://localhost:4655', 'https://systemslibrarian.github.io']) {
+    const pageURL = `${origin}/crypto-lab-jwt-forge/`;
+    const pageHost = new URL(pageURL);
+    for (const resource of [pageURL, `${pageURL}assets/index.js`, `blob:${origin}/fixture`, 'data:text/plain,fixture']) {
+      expect(belongsToPage(resource, pageURL), resource).toBe(true);
+    }
+    for (const resource of [
+      `${pageHost.protocol}//${pageHost.hostname}.attacker.invalid/crypto-lab-jwt-forge/`,
+      `${origin}@attacker.invalid/crypto-lab-jwt-forge/`,
+      'https://attacker.invalid/collect',
+      'http://localhost:4656/collect',
+      'blob:https://attacker.invalid/fixture',
+    ]) {
+      expect(belongsToPage(resource, pageURL), resource).toBe(false);
+    }
+  }
+});
+
+test('nothing leaves the page: no third-party requests, no persisted key material', async ({ page, baseURL }) => {
   test.setTimeout(60_000);
+  expect(baseURL, 'privacy boundary requires the actual configured page URL').toBeTruthy();
   const offSite: string[] = [];
   page.on('request', (r) => {
     const u = r.url();
-    if (!u.startsWith('http://localhost:4655/') && !u.startsWith('data:') && !u.startsWith('blob:')) {
+    if (!belongsToPage(u, baseURL!)) {
       offSite.push(u);
     }
   });
