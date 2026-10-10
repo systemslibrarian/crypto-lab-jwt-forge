@@ -107,6 +107,20 @@ describe('Vulnerable verifier is demonstrably fooled (DELIBERATE — do not "fix
 });
 
 describe('signature and claim validity are reported independently (invariant #5)', () => {
+  it.each([
+    { exp: NOW },
+    { exp: '1000' },
+    { nbf: null },
+    { iat: '1000' },
+  ])('rejects genuine signed tokens with invalid time claims %j while preserving signature validity', async claims => {
+    const t = await sign({}, { ...baseClaims(), ...claims } as JwtClaims, keys.rsaPrivate);
+    const r = await verifyCorrect(t, policy({}));
+    expect(r.signature).toBe('valid');
+    expect(r.claims).toBe('invalid');
+    expect(r.decision).toBe('reject');
+    expect(r.systemIntegrity).toBe('ok');
+  });
+
   it('valid signature on an expired token => signature valid, claims invalid', async () => {
     const t = await sign({}, { ...baseClaims(), exp: NOW - 10 }, keys.rsaPrivate);
     const r = await verifyCorrect(t, policy({}));

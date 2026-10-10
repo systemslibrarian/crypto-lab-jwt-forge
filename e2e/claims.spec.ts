@@ -101,8 +101,8 @@ test('genuine RS256 token: the headline matches the token the page actually rend
 
   await expect(headline(result(page))).toHaveText(/Valid signature — all checks passed/);
   await expect(result(page).locator('.banner').first()).toHaveClass(/valid/);
-  expect(await statusValue(result(page), 'Signature check')).toContain('valid');
-  expect(await statusValue(result(page), 'Claim check (exp/nbf)')).toContain('valid');
+  expect(await statusValue(result(page), 'Signature check')).toBe('✓ valid');
+  expect(await statusValue(result(page), 'Claim check (exp/nbf)')).toBe('✓ valid');
   await expect(result(page).locator('.reason').first()).toHaveText(
     new RegExp(`valid ${header.alg} signature`),
   );
@@ -211,7 +211,7 @@ test('key confusion SUCCEEDS against the vulnerable verifier using the public ke
   expect(claims.admin).toBe(true);
 
   expect(await statusValue(result(page), 'Token claimed alg')).toBe(String(header.alg));
-  expect(await statusValue(result(page), 'Signature check')).toContain('valid');
+  expect(await statusValue(result(page), 'Signature check')).toBe('✓ valid');
   await expect(result(page).locator('.reason').first()).toHaveText(
     /a public value was used as a secret/,
   );
@@ -255,7 +255,7 @@ test('key confusion is REFUSED by the correct verifier, and both verdicts show s
   await expect(headline(correct)).toHaveText(/REJECTED AS EXPECTED/);
   await expect(headline(vulnerable)).toHaveText(/FORGED TOKEN ACCEPTED/);
   expect(await statusValue(correct, 'Signature')).toContain('not-checked');
-  expect(await statusValue(vulnerable, 'Signature')).toContain('valid');
+  expect(await statusValue(vulnerable, 'Signature')).toBe('✓ valid');
   // Both columns judged the SAME token, so both must report the same claimed alg.
   const claimedCorrect = await statusValue(correct, 'Claimed alg');
   expect(claimedCorrect).toBe(await statusValue(vulnerable, 'Claimed alg'));
@@ -280,14 +280,14 @@ test('key confusion fails when the verifier does not hold the key the attacker M
   // and the same broken code path rejects it — the attack is key-specific, not magic.
   await page.locator('input[data-action="heldkey"][data-key="ecPublic"]').click();
   await expect(headline(result(page))).toHaveText(/Rejected|REJECTED AS EXPECTED/);
-  expect(await statusValue(result(page), 'Signature check')).toContain('invalid');
+  expect(await statusValue(result(page), 'Signature check')).toBe('⚠ invalid');
   await expect(result(page).locator('.reason').first()).toHaveText(/signature did not verify/);
 
   await page.locator('input[data-action="heldkey"][data-key="hmac"]').click();
   await expect(result(page).locator('.reason').first()).toHaveText(
     /HMAC with the genuine shared secret/,
   );
-  expect(await statusValue(result(page), 'Signature check')).toContain('invalid');
+  expect(await statusValue(result(page), 'Signature check')).toBe('⚠ invalid');
 });
 
 // ---- 4. control: silent tamper -------------------------------------------------
@@ -307,7 +307,7 @@ test('silent tamper is refused by BOTH verifiers — the control that proves the
 
   // Vulnerable verifier first — its broken paths still catch a plain forgery.
   expect(await statusValue(result(page), 'Verifier mode')).toContain('Vulnerable');
-  expect(await statusValue(result(page), 'Signature check')).toContain('invalid');
+  expect(await statusValue(result(page), 'Signature check')).toBe('⚠ invalid');
   expect(await statusValue(result(page), 'Claim check (exp/nbf)')).toContain('not-checked');
   await expect(result(page).locator('.causal .chain')).toHaveText(/It does NOT pass/);
 
@@ -317,7 +317,7 @@ test('silent tamper is refused by BOTH verifiers — the control that proves the
   );
   await expect(headline(result(page))).toHaveText(/REJECTED AS EXPECTED/);
   expect(await statusValue(result(page), 'Verifier mode')).toContain('Correct');
-  expect(await statusValue(result(page), 'Signature check')).toContain('invalid');
+  expect(await statusValue(result(page), 'Signature check')).toBe('⚠ invalid');
 
   // And side by side, so "rejected everywhere" is visible in one shot.
   await page.locator('[data-action="compare-on"]').click();
@@ -325,8 +325,8 @@ test('silent tamper is refused by BOTH verifiers — the control that proves the
   const cols = result(page).locator('.result-col');
   await expect(headline(cols.nth(0))).toHaveText(/REJECTED AS EXPECTED/);
   await expect(headline(cols.nth(1))).toHaveText(/REJECTED AS EXPECTED/);
-  expect(await statusValue(cols.nth(0), 'Signature')).toContain('invalid');
-  expect(await statusValue(cols.nth(1), 'Signature')).toContain('invalid');
+  expect(await statusValue(cols.nth(0), 'Signature')).toBe('⚠ invalid');
+  expect(await statusValue(cols.nth(1), 'Signature')).toBe('⚠ invalid');
   await expect(result(page).locator('.sr-only[role="status"]')).toHaveText(
     'Correct verifier rejects; Vulnerable verifier rejects.',
   );
@@ -344,7 +344,7 @@ test('hand-edited claims with the old signature are rejected, and the edit is vi
   await page.locator('[data-action="tamper"]').click();
 
   await expect(headline(result(page))).toHaveText(/REJECTED AS EXPECTED/);
-  expect(await statusValue(result(page), 'Signature check')).toContain('invalid');
+  expect(await statusValue(result(page), 'Signature check')).toBe('⚠ invalid');
   await expect(result(page).locator('.causal h3')).toHaveText(/manual tamper — causal chain/);
 
   const token = await currentToken(page);
@@ -422,7 +422,7 @@ test('an empty allowlist accepts nothing — and the vulnerable verifier bypasse
   await page.locator('[data-action="mode"][data-mode="vulnerable"]').click();
   await expect(headline(result(page))).toHaveText(/ACCEPTED OUTSIDE THE POLICY ALLOWLIST/);
   await expect(headline(result(page))).not.toHaveText(/FORGED TOKEN ACCEPTED/);
-  expect(await statusValue(result(page), 'Signature check')).toContain('valid');
+  expect(await statusValue(result(page), 'Signature check')).toBe('✓ valid');
   await expect(result(page).locator('.reason').first()).toHaveText(
     /is NOT in the application's allowlist — this verifier never checked/,
   );
@@ -472,7 +472,7 @@ for (const [alg, keyId, keyKind] of [
     const token = await currentToken(page);
     expect(decodeToken(token).header.alg).toBe(alg);
     expect(await statusValue(result(page), 'Token claimed alg')).toBe(alg);
-    expect(await statusValue(result(page), 'Signature check')).toContain('valid');
+    expect(await statusValue(result(page), 'Signature check')).toBe('✓ valid');
     await expect(result(page).locator('.trace-step', { hasText: 'Routine chosen by KEY TYPE' })).toContainText(
       `using ${keyKind} → ${alg} routine`,
     );
@@ -493,11 +493,11 @@ test('an expired token reports a VALID signature and INVALID claims, with number
 
   await expect(result(page).locator('.reason').first()).toHaveText(/signature is valid but token expired/);
   // Signature and claim validity are reported separately, never collapsed.
-  expect(await statusValue(result(page), 'Signature check')).toContain('valid');
-  expect(await statusValue(result(page), 'Claim check (exp/nbf)')).toContain('invalid');
+  expect(await statusValue(result(page), 'Signature check')).toBe('✓ valid');
+  expect(await statusValue(result(page), 'Claim check (exp/nbf)')).toBe('⚠ invalid');
 
   const detail = await statusValue(result(page), 'Claim detail');
-  const m = detail.match(/exp=(\d+) < now=(\d+)/);
+  const m = detail.match(/exp=(\d+) <= now=(\d+)/);
   expect(m, `claim detail should print both clocks, got: ${detail}`).not.toBeNull();
   const [, expStr, nowStr] = m!;
   expect(Number(expStr), 'the exp echoed back is the one we signed').toBe(pastExp);
@@ -509,6 +509,26 @@ test('an expired token reports a VALID signature and INVALID claims, with number
 });
 
 // ---- 8. fail-closed input handling ---------------------------------------------
+
+test('exact expiry and malformed NumericDate reject after real signing without conflating signature status', async ({ page }) => {
+  await page.addInitScript(() => { Date.now = () => 1_000_000; }); // fixed 1000-second policy clock
+  await boot(page);
+  for (const timeClaims of [{ exp: 1000 }, { exp: '1000' }, { nbf: null }, { iat: '1000' }]) {
+    await openDecoded(page);
+    const claims = JSON.parse(await page.locator('#ta-payload').inputValue()) as Record<string, unknown>;
+    delete claims.exp; delete claims.nbf; delete claims.iat;
+    await page.locator('#ta-payload').fill(JSON.stringify({ ...claims, ...timeClaims }));
+    await page.locator('[data-action="resign"]').click();
+    const name = Object.keys(timeClaims)[0];
+    await expect(result(page).locator('.reason').first()).toContainText(
+      timeClaims.exp === 1000 ? 'exp=1000 <= now=1000' : `${name} must be a finite NumericDate number`,
+    );
+    expect(await statusValue(result(page), 'Signature check')).toBe('✓ valid');
+    expect(await statusValue(result(page), 'Claim check (exp/nbf)')).toBe('⚠ invalid');
+    const signed = decodeToken(await currentToken(page));
+    expect(signed.claims[name]).toEqual((timeClaims as Record<string, unknown>)[name]);
+  }
+});
 
 test('the token editor fails closed on bad JSON and on an unsignable alg', async ({ page }) => {
   await boot(page);
