@@ -497,7 +497,7 @@ test('an expired token reports a VALID signature and INVALID claims, with number
   expect(await statusValue(result(page), 'Claim check (exp/nbf)')).toContain('invalid');
 
   const detail = await statusValue(result(page), 'Claim detail');
-  const m = detail.match(/exp=(\d+) < now=(\d+)/);
+  const m = detail.match(/exp=(\d+) <= now=(\d+)/);
   expect(m, `claim detail should print both clocks, got: ${detail}`).not.toBeNull();
   const [, expStr, nowStr] = m!;
   expect(Number(expStr), 'the exp echoed back is the one we signed').toBe(pastExp);
@@ -509,6 +509,26 @@ test('an expired token reports a VALID signature and INVALID claims, with number
 });
 
 // ---- 8. fail-closed input handling ---------------------------------------------
+
+test('exact expiry and malformed NumericDate reject after real signing without conflating signature status', async ({ page }) => {
+  await page.addInitScript(() => { Date.now = () => 1_000_000; }); // fixed 1000-second policy clock
+  await boot(page);
+  for (const timeClaims of [{ exp: 1000 }, { exp: '1000' }, { nbf: null }, { iat: '1000' }]) {
+    await openDecoded(page);
+    const claims = JSON.parse(await page.locator('#ta-payload').inputValue()) as Record<string, unknown>;
+    delete claims.exp; delete claims.nbf; delete claims.iat;
+    await page.locator('#ta-payload').fill(JSON.stringify({ ...claims, ...timeClaims }));
+    await page.locator('[data-action="resign"]').click();
+    const name = Object.keys(timeClaims)[0];
+    await expect(result(page).locator('.reason').first()).toContainText(
+      timeClaims.exp === 1000 ? 'exp=1000 <= now=1000' : `${name} must be a finite NumericDate number`,
+    );
+    expect(await statusValue(result(page), 'Signature check')).toContain('valid');
+    expect(await statusValue(result(page), 'Claim check (exp/nbf)')).toContain('invalid');
+    const signed = decodeToken(await currentToken(page));
+    expect(signed.claims[name]).toEqual((timeClaims as Record<string, unknown>)[name]);
+  }
+});
 
 test('the token editor fails closed on bad JSON and on an unsignable alg', async ({ page }) => {
   await boot(page);

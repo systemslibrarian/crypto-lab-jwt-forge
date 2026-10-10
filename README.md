@@ -46,7 +46,7 @@ all keys are generated in your browser per session and never leave the page.
 - Trusting the token's own `alg` header lets an attacker set `alg:none` and strip the signature entirely.
 - HS/RS key confusion: a verifier that handles all algorithms in one path can be tricked into verifying an HS256 token using the RSA *public* key as the HMAC secret, letting anyone forge tokens.
 - Treating a signed JWT as confidential — JWS signs but does not encrypt, so the base64url payload is readable by anyone who holds the token.
-- A valid signature is not authorization — skipping expiry, audience, or issuer claim checks lets stale or misdirected tokens through.
+- A valid signature is not authorization — skipping expiry, audience, or issuer claim checks lets stale or misdirected tokens through. This demo checks present `exp`/`nbf`/`iat` values as finite NumericDate numbers (fractional seconds permitted), requires `now < exp` and `now >= nbf` with zero leeway, and reports signature and claim validity separately. It applies no token-age policy to `iat`; audience and issuer authorization remain application policy outside this time-claim helper.
 - Weak or shared HS256 secrets can be brute-forced offline once a single token is captured.
 
 ## Real-World Usage
