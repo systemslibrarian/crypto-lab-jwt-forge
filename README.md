@@ -13,6 +13,8 @@ exists to make two classic structural verification bugs — `alg:none` and HS/RS
 confusion — concrete, by running the same forged token against a *correct* verifier and a
 deliberately *vulnerable* one.
 
+> **Scope.** Not production crypto — a teaching demo. The signature operations are real, but the lab deliberately includes vulnerable verification paths and does not implement a complete authentication or authorization system. Use invented data and a maintained, reviewed JWT library for deployments.
+
 ## When to Use It
 
 - **Stateless service-to-service auth** — a resource server can verify a JWS token's origin

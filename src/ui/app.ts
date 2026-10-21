@@ -953,6 +953,7 @@ export async function mountApp(el: HTMLElement): Promise<void> {
           <h1 class="cl-hero-title">JWT Forge</h1>
           <p class="cl-hero-sub">JWS/JWT · alg:none · RS/HS confusion</p>
           <p class="cl-hero-desc">Decode a token, swap its <code>alg</code>, and run the two classic structural forgeries against a Correct verifier and a deliberately Vulnerable one, side by side.</p>
+          <p class="cl-hero-desc"><strong>Teaching demo, not a production JWT library. Real signatures and deliberately vulnerable verification paths; use only invented tokens and data.</strong></p>
         </div>
         <aside class="cl-hero-why" aria-label="Why it matters">
           <span class="cl-hero-why-label">WHY IT MATTERS</span>
