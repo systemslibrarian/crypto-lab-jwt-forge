@@ -353,6 +353,7 @@ function renderPolicyPanel(): void {
       <legend>Accepted algorithms (required allowlist — empty = accept nothing)</legend>
       <div class="checks">${checks}</div>
     </fieldset>
+    <p class="hint" role="note"><strong><code>none</code> is an unsecured JWS.</strong> The checkbox lets you explore the failure mode; this global allowlist cannot model a safe exception for one specific object or operation. Leave <code>none</code> off for ordinary JWT verification. <a href="https://datatracker.ietf.org/doc/html/draft-ietf-jose-deprecate-none-rsa15-08#section-5" target="_blank" rel="noopener noreferrer">JOSE deprecation draft-08 §5 (November 1, 2026)</a> was approved by the IESG on November 6 but is awaiting RFC publication. It calls for <code>none</code> to be disabled by default and any necessary exception scoped to specific objects or operations.</p>
 
     <fieldset>
       <legend>Key the verifier holds</legend>
@@ -382,7 +383,7 @@ function renderPolicyPanel(): void {
       <ol>
         <li><strong>Never derive accepted algorithms from the token header.</strong> The application supplies the allowlist; the token does not get to name its own algorithm.</li>
         <li><strong>Bind each key to exactly the algorithms it may verify.</strong> An RSA public key must never be reachable from an HMAC code path — enforce it with types, not discipline.</li>
-        <li><strong>Disable <code>none</code></strong> unless the surrounding protocol explicitly requires an unsecured JWS.</li>
+        <li><strong>Disable <code>none</code> by default.</strong> Only an explicitly required unsecured JWS for a specific object or operation may be considered; do not enable it globally. This demo's checkbox is for teaching, not a production exception policy.</li>
         <li><strong>Reject before claims are trusted.</strong> Validate the signature first; check <code>exp</code>/<code>nbf</code> separately and never conflate "valid signature" with "valid token".</li>
       </ol>
     </details>

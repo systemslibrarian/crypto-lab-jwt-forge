@@ -43,6 +43,8 @@ side-by-side comparison, a step-by-step decision trace, a guided tour, and share
 links. This demo verifies **signatures only**; it does not encrypt or decrypt anything, and
 all keys are generated in your browser per session and never leave the page.
 
+**JOSE status (November 6, 2026):** The IESG [approved draft-ietf-jose-deprecate-none-rsa15](https://datatracker.ietf.org/doc/draft-ietf-jose-deprecate-none-rsa15/), which is awaiting RFC publication. [Draft-08 §5](https://datatracker.ietf.org/doc/html/draft-ietf-jose-deprecate-none-rsa15-08#section-5) calls for JWS `none` to be disabled by default; any necessary exception must be limited to specific objects or operations, not a global setting. The `none` checkbox here is a teaching control and cannot express such a scoped exception. The draft also addresses JWE `RSA1_5` encryption, which this JWS-only lab does not implement; it does not deprecate RS256 signatures. The forged-token exercise remains intentionally available.
+
 ## What Can Go Wrong
 
 - Trusting the token's own `alg` header lets an attacker set `alg:none` and strip the signature entirely.
